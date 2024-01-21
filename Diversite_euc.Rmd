@@ -1,0 +1,280 @@
+---
+title: "Diversité_euc"
+author: "Divya"
+date: "2023-02-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list=ls())
+```
+
+
+### Load libraries
+```{r message=TRUE}
+library(vegan)
+library(tidyr)
+library(dplyr)
+library(FSA)
+```
+
+
+### Loading all files needed here and seperating certain dataframes
+```{r}
+# Load ASV table and metadata
+ASV_table <- t(read.table("~/sequences/Euc/euc_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
+metadata <- read.table("~/sequences/Euc/euc_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
+
+# remove the mysterious "is.neg" column
+metadata <- metadata %>% select(-is.neg)
+
+# Since our sample names differ in our ASV and Metadata table, we'll have to replace the "-" to "."
+# We'll also change the name of the first column to "Nom"
+metadata$X <- gsub("-", ".", metadata$X)
+colnames(metadata)[1] <- "Nom"
+
+```
+
+### Calculate the ALPHA DIVERSITY
+```{r}
+# Calculate the alpha diversity and put it in the metadata data fame
+metadata$alpha_diversity <- diversity(ASV_table, index = "shannon")
+metadata$richness <- specnumber(ASV_table)
+```
+
+### Separate the Filters from the Rocks. We'll do dataframes WITH and WITHOUT the Terrain data 
+```{r}
+# So these will be with the Terrain (in both dataframe)
+Filters_all <- metadata[(metadata$SampleType == "Filtre"), ]
+Filters_all$Nom <- gsub("F-", "", Filters_all$Nom)
+
+Rocks_all <- rbind(subset(metadata, SampleType == "Roche"),
+                   subset(metadata, Bioreacteur == "Terrain"))
+Rocks_all$Nom <- gsub("R-", "", Rocks_all$Nom)
+
+
+# And these will be the ones without the Terrain 
+Filters_noT <- Filters_all[!(Filters_all$Bioreacteur == "Terrain"), ]
+Rocks_noT <- subset(metadata, SampleType == "Roche")
+
+# And let's make a dataframe with Filters and Rocks, but no Terrain
+RFonly <- metadata[!(metadata$Bioreacteur == "Terrain"), ]
+
+# To merge our geochemical data to the reste of our metadata, I'll have to make another dataframe
+Analyse <- read.table("/home/dpatel/Analyse_geo_merged.csv", header=TRUE, sep=",", row.names = NULL)
+Filtres_noT_geo <- merge(Filters_noT, Analyse, by = c("Bioreacteur", "Jour"), sort = TRUE)
+```
+
+### Visualizing our alpha diversity WITHOUT our Terrain
+```{r}
+# Making a plot with our alpha diversities data for our Filters and our Rocks
+hist(Filters_noT$alpha_diversity)
+qqnorm(Filters_noT$alpha_diversity)
+qqline(Filters_noT$alpha_diversity, distribution = qnorm)
+
+shapiro.test(Filters_noT$alpha_diversity)
+# W = 0.96193, p-value = 0.5292
+
+hist(Rocks_noT$alpha_diversity)
+qqnorm(Rocks_noT$alpha_diversity)
+qqline(Rocks_noT$alpha_diversity, distribution = qnorm)
+
+shapiro.test(Rocks_noT$alpha_diversity)
+# W = 0.98074, p-value = 0.9743
+
+# Let's also do a shapiro test with all the data combined but WITHOUT our Terrain
+shapiro.test(RFonly$alpha_diversity)
+# W = 0.97739, p-value = 0.6407
+
+# In all cases, the p-value is greater than 0.05. So the data follows a normal distribution
+```
+
+
+### Checking the Homogeneity of Variance
+```{r}
+bartlett.test(alpha_diversity ~ Bioreacteur, data = Filters_noT)
+# Bartlett's K-squared = 1.3938, df = 2, p-value = 0.4981
+# They have the same variance among Bioreactors
+
+bartlett.test(alpha_diversity ~ Bioreacteur, data = Rocks_noT)
+# Bartlett's K-squared = 0.54458, df = 2, p-value = 0.7616
+# They have the same variance among Bioreactors
+
+bartlett.test(alpha_diversity ~ SampleType, data = RFonly)
+# Bartlett's K-squared = 12.21, df = 1, p-value = 0.0004754
+# The variance is different among SampleType
+```
+
+
+### Comparing diversity between Bioreactors (No Terrain)
+```{r}
+# To compare our Bioreactors for our Rock and Filter, we'll do a Krulskall Wallis test
+kruskal.test(alpha_diversity ~ Bioreacteur, data = Filters_noT)
+# Kruskal-Wallis chi-squared = 1.4246, df = 2, p-value = 0.4905
+# There is no significant difference between the Bioreactors
+
+kruskal.test(alpha_diversity ~ Bioreacteur, data = Rocks_noT)
+# Kruskal-Wallis chi-squared = 7.8854, df = 2, p-value = 0.0194
+# There is a significant difference between the Bioreactors
+
+# To compare our SampleType, we'll do a Krulskall Wallis test
+kruskal.test(alpha_diversity ~ SampleType, data = RFonly)
+# Kruskal-Wallis chi-squared = 0.31005, df = 1, p-value = 0.5777
+# There is no significant difference between the SampleType
+
+```
+
+
+# Comparing diversity between Bioreactors 
+```{r}
+RFonly$Bioreacteur <- ifelse(grepl("^B", RFonly$Bioreacteur), "Bioreactor 1",
+                        ifelse(grepl("^J", RFonly$Bioreacteur), "Bioreactor 2",
+                         ifelse(grepl("^R", RFonly$Bioreacteur), "Bioreactor 3", "Field")))
+
+# Here, we want our bioreactors to have a similar diversity since these are supposed to be triplicates. 
+# We'll start off with boxplots for our Filters and Rocks WITHOUT our Terrain data
+RF_box <- ggplot(RFonly, aes(x = Bioreacteur, y = alpha_diversity, fill = SampleType)) + 
+  geom_boxplot() +
+  labs(x = "Bioreactors", y = "Shannon index for Eukaryotes") +
+  scale_fill_manual(labels = c("Planktonic", "Sessile"), values = c("#2A9D8F", "#F4A261"), name = "Community") +
+   theme(text = element_text(size = 22), legend.text = element_text(size = 18))
+RF_box
+#ggsave("/home/dpatel/sequences/Euc/euc_Figures/Alpha.jpeg", width = 12, height = 9, plot = last_plot())
+
+
+# Looks like our diversity in our Rocks sample varies a bit between Bioreactors.
+# For now, let's do an anova to compare the Bioreacteurs among each other for the Filters
+# For that, we'll have to rename the Bioreacteurs of our Rock sample so that they don't get merged with our Filter samples
+RFonly$Bioreacteur <- ifelse(RFonly$SampleType == "Roche" & RFonly$Bioreacteur == "Bleu", "Bleu1", 
+                            ifelse(RFonly$SampleType == "Roche" & RFonly$Bioreacteur == "Jaune", "Jaune1",
+                                   ifelse(RFonly$SampleType == "Roche" & RFonly$Bioreacteur == "Rouge", "Rouge1", 
+                                          RFonly$Bioreacteur)))
+
+# We'll do a Welch’s t-test to compare our alpha diversity between SampleType.
+res.Wt <- t.test(alpha_diversity ~ SampleType, data = RFonly)
+res.Wt
+# t = 0.70616, df = 28.806, p-value = 0.4858    
+
+```
+
+# Is there a link between our environemental factors and our diversity?
+```{r}
+# For this part, we're just using our Filters data without our Terrain in it. I'll have to make another dataframe since I'm missing some data.
+Analyse <- read.table("/home/dpatel/Analyse_geo_merged.csv", header=TRUE, sep=",", row.names = NULL)
+
+Filtres_noT_geo <- merge(Filters_noT, Analyse, by = c("Bioreacteur", "Jour"), sort = TRUE)
+
+# We'll do multiple models with the variables
+geo_glm1 <- glm(alpha_diversity ~ Moy_DIC + Moy_DOC + Moy_NH4 + Moy_NO3 + Moy_NO2 + Moy_NOx, data = Filtres_noT_geo)
+geo_glm2 <- glm(alpha_diversity ~ Moy_DIC + Moy_DOC + Moy_NH4 + Moy_NO3 + Moy_NO2 , data = Filtres_noT_geo)
+geo_glm3 <- glm(alpha_diversity ~ Moy_DIC + Moy_DOC + Moy_NH4 + Moy_NO3 , data = Filtres_noT_geo)
+geo_glm4 <- glm(alpha_diversity ~ Moy_DIC + Moy_DOC + Moy_NH4 , data = Filtres_noT_geo)
+geo_glm5 <- glm(alpha_diversity ~ Moy_DIC + Moy_DOC , data = Filtres_noT_geo)
+geo_glm6 <- glm(alpha_diversity ~ Moy_DIC , data = Filtres_noT_geo)
+
+# Checking which models is the best
+
+AIC(geo_glm1,geo_glm2,geo_glm3,geo_glm4,geo_glm5,geo_glm6)
+
+# Results
+#           df     AIC
+# geo_glm1	8	  15.40639		
+# geo_glm2	7	  14.54530		
+# geo_glm3	6	  13.19814		
+# geo_glm4	5	  12.41173		
+# geo_glm5	4	  14.99305		
+# geo_glm6	3	  13.29009	
+
+
+# The best model seems to be our model 4 (alpha_diversity ~ Moy_DIC + Moy_DOC + Moy_NH4). Let's compare the model to the other ones.
+
+anova(geo_glm1, geo_glm4, test="Chisq")
+anova(geo_glm2, geo_glm4, test="Chisq")
+anova(geo_glm3, geo_glm4, test="Chisq")
+anova(geo_glm5, geo_glm4, test="Chisq")
+anova(geo_glm6, geo_glm4, test="Chisq")
+
+# The geo_glm4 is not statistically different from the model 1, 2, 3 and 6, but is statistically different from the model 5 (but not by much).
+# So it seems like the NH4 is an important parameter and that we must keep it.
+
+# Now, let's look at the results of our glm and also we should look at the Residuals
+
+summary(geo_glm4)
+plot(geo_glm4)
+
+
+```
+
+
+###### BETA DIVERSITY ######
+
+### Correlation between our environemental factors and our beta diversity
+```{r}
+# Let's start by doing a dissimilarity matrix (Bray-Kurtis)
+beta_dist <- vegdist(ASV_table, method = "bray")
+write.csv(as.matrix(beta_dist), "/home/dpatel/sequences/Euc/euc_csv/dist_matrix.csv")
+beta_dist <- read.table("/home/dpatel/sequences/Euc/euc_csv/dist_matrix.csv", header=TRUE, sep=",", row.names = NULL,)
+colnames(beta_dist) <- c("Nom", beta_dist$X)
+
+# Now we have to join the metadata dataframe with the matrix
+meta_distance <- inner_join(metadata, beta_dist, by = "Nom")
+
+all_dist <- meta_distance %>%
+  select(all_of(meta_distance$Nom)) %>%
+  as.dist()
+
+# Run the adonis2 function and look at the results
+Corr <- adonis2(all_dist ~ SampleType + Bioreacteur, data = meta_distance, by="margin")
+print(Corr)
+
+```
+
+
+### Plot a PCoA
+```{r}
+# Load the dissimilarity matrix
+beta_dist <- read.table("/home/dpatel/sequences/Euc/euc_csv/dist_matrix.csv", header=TRUE, sep=",", row.names = 1)
+
+# Perform PCoA analysis using the "cmdscale" function
+PCOA <- cmdscale(beta_dist, eig=TRUE, add=TRUE)
+
+# Extract the coordinate results from the PCOA
+pcoa_df1 <- data.frame(PCoA1 = PCOA$points[,1], PCoA2 = PCOA$points[,2], Sample = row.names(beta_dist))
+
+pcoa_df1$SampleType <- ifelse(grepl("^F", pcoa_df1$Sample), "Filter",
+                        ifelse(grepl("^R", pcoa_df1$Sample), "Rock",
+                               ifelse(grepl("^T|^P", pcoa_df1$Sample), "Field", "Autre")))
+
+# Remove "R." and "F." from the sample names in the PCoA data frame
+pcoa_df1$Sample <- gsub("^R\\.|^F\\.", "", pcoa_df1$Sample)
+
+# Create a new column in the PCoA data frame that indicates the shape of each sample
+pcoa_df1$Shape <- ifelse(grepl("^B", pcoa_df1$Sample), "circle",
+                        ifelse(grepl("^J", pcoa_df1$Sample), "triangle",
+                         ifelse(grepl("^R", pcoa_df1$Sample), "square", "diamond")))
+
+percent_explained=100*PCOA$eig/sum(PCOA$eig)
+reduced_percent=format(round(percent_explained[1:2], digits=2), nsmall=1, trim=TRUE) # reduce number of digits
+
+
+# Visualize the PCoA plot using ggplot
+p <- ggplot(pcoa_df1, aes(x = PCoA1, y = PCoA2, color = SampleType, shape = Shape, label = Sample)) +
+  geom_point(size = 3.5) +
+  xlab(paste0("PCoA 1 (", reduced_percent[1], "% variation)")) +
+  ylab(paste0("PCoA 2 (", reduced_percent[2], "% variation)")) +
+  geom_text(hjust = 0, vjust = 0) +
+  theme(legend.position = "right") +  # move legend to the bottom
+  scale_color_manual(values = c("#21B6A8","#A45C40","#116530"), 
+                     name = "Sample Type") +  # define legend title and labels
+  scale_shape_manual(values = c(16, 17, 15, 18),  # Set the shape scheme
+                     labels = c("Bioreactor 1", "Bioreactor 2", "Bioreactor 3", "Field"),  # Set the labels
+                     name = "Bioreactor")
+
+# Show the plot
+p + theme(text = element_text(size = 22), legend.text = element_text(size = 18))
+ggsave("/home/dpatel/sequences/Euc/euc_Figures/PCOA_beta1.jpeg", width = 9, height = 6, plot = last_plot())
+
+```
+

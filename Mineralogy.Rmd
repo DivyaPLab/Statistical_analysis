@@ -1,0 +1,174 @@
+---
+title: "Mineralogy"
+author: "Divya"
+date: "2023-08-23"
+output: html_document
+---
+
+
+### Load libraries
+```{r message=TRUE}
+library(vegan)
+library(tidyr)
+library(dplyr)
+library(FSA)
+library(ggplot2)
+
+```
+
+### Loading df 
+```{r}
+rm(list=ls())
+
+roug <- read.table("~/sequences/Bac/bac_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
+colnames(roug) <- c("Nom", "SampleType","Bioreactor", "Jour", "concADN", "Roughness1", "Roughness2", "is.neg")
+
+
+```
+
+### Doing some cleaning in the dataframes
+```{r}
+# Remove the mysterious "is.neg" column and remove the unecessary column in df 
+roug <- roug %>% select(-is.neg, -concADN, -Jour)
+
+# Keep the Rock data only 
+rougR <- roug[roug$SampleType == "Roche", ]
+
+
+rougR$Nom <- gsub("R-", "", rougR$Nom)
+
+
+# Change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+rougR$Bioreactor <- ifelse(grepl("^B", rougR$Bioreactor), "Bioreactor 1",
+                        ifelse(grepl("^J", rougR$Bioreactor), "Bioreactor 2",
+                         ifelse(grepl("^R", rougR$Bioreactor), "Bioreactor 3", "Field")))
+
+```
+
+### Making the plot
+```{r}
+# Assuming your dataframe is called 'df'
+p <- ggplot(data = df, aes(x = Bioreactor)) +
+  geom_point(aes(y = Roughness1), size = 3) +
+  geom_point(aes(y = Roughness2), size = 3) +
+  theme(text = element_text(size = 18))+
+  labs(x = "Bioreactor", y = "Roughness")
+
+p
+
+#ggsave("~/sequences/Bac/bac_Figures/Rugos.jpeg", width = 5.5, height = 4, plot = last_plot())
+```
+
+
+
+### Mineralogy
+```{r}
+
+# Load metadata
+mineral <-read.table("~/Mineralogie_merged.csv", header=TRUE, sep=",", row.names = NULL)
+ 
+#df$Minerals <- factor(df$Minerals, c("Quartz", "Mica","RedFeldspar ","WhiteFeldspar ", "IronOxide", "Undetermined"))
+
+palette <- c("#FFA07B","#F9D984","#ADC178","#82c0cc","#ffadc7","#c38e70")
+```
+
+
+### Making a plot with all the minerals
+```{r}
+p <- ggplot(mineral, aes(x = Bioreactor, y = Percentage, fill = Minerals)) + 
+     geom_boxplot() +
+     labs(y = "Percentage (%)") +
+     scale_fill_manual(values = palette) +
+     theme(text = element_text(size = 18))
+
+p
+
+#ggsave("~/sequences/Bac/bac_Figures/Minerals.jpeg", width = 8, height = 6, plot = last_plot())
+```
+
+
+###### BAC #######
+
+### Loading all files needed here and seperating certain dataframes
+```{r}
+
+# Load ASV table
+Bac_ASV_table <- t(read.table("~/sequences/Bac/bac_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
+
+# Calculate the alpha diversity and put it a new data fame
+roug$alpha_diversity <- diversity(Bac_ASV_table, index = "shannon")
+
+# Keep the Rock data only 
+bacr <- roug[roug$SampleType == "Roche", ]
+bacr$Nom <- gsub("R-", "", bacr$Nom)
+
+
+# Change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+bacr$Bioreactor <- ifelse(grepl("^B", bacr$Bioreactor), "Bioreactor 1",
+                        ifelse(grepl("^J", bacr$Bioreactor), "Bioreactor 2",
+                         ifelse(grepl("^R", bacr$Bioreactor), "Bioreactor 3", "Field")))
+
+
+# Load the necessary library if it's not already loaded
+library(correlation)
+
+# Calculate the Pearson correlation coefficient and p-value between alpha_diversity and Roughness1
+cor.test(roug$alpha_diversity, roug$Roughness1, method = "pearson")
+# Calculate the Pearson correlation coefficient and p-value between alpha_diversity and Roughness2
+cor.test(roug$alpha_diversity, roug$Roughness2, method = "pearson")
+
+
+```
+
+
+
+###### EUC #######
+### Loading all files needed here and seperating certain dataframes
+```{r}
+
+rm(list=ls())
+
+roug <- read.table("~/sequences/Euc/euc_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
+colnames(roug) <- c("Nom", "SampleType","Bioreactor", "Jour", "concADN", "Roughness1", "Roughness2", "is.neg")
+
+# Load ASV table
+Euc_ASV_table <- t(read.table("~/sequences/Euc/euc_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
+
+# Calculate the alpha diversity and put it a new data fame
+roug$alpha_diversity <- diversity(Euc_ASV_table, index = "shannon")
+
+# Keep the Rock data only 
+roug <- roug[roug$SampleType == "Roche", ]
+roug$Nom <- gsub("R-", "", roug$Nom)
+
+
+# Change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+roug$Bioreactor <- ifelse(grepl("^B", roug$Bioreactor), "Bioreactor 1",
+                        ifelse(grepl("^J", roug$Bioreactor), "Bioreactor 2",
+                         ifelse(grepl("^R", roug$Bioreactor), "Bioreactor 3", "Field")))
+
+
+# Load the necessary library if it's not already loaded
+library(correlation)
+
+# Calculate the Pearson correlation coefficient and p-value between alpha_diversity and Roughness1
+cor.test(roug$alpha_diversity, roug$Roughness1, method = "pearson")
+# Calculate the Pearson correlation coefficient and p-value between alpha_diversity and Roughness2
+cor.test(roug$alpha_diversity, roug$Roughness2, method = "pearson")
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

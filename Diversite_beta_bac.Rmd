@@ -1,0 +1,629 @@
+---
+title: "Diversité bêta"
+author: "Divya"
+date: "2023-05-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list=ls())
+```
+
+
+### Load libraries
+```{r message=TRUE}
+library(vegan)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+```
+
+
+
+### doing a dissimilarity matrix (Bray-Kurtis)
+```{r}
+# Load ASV table and metadata
+ASV_table <- t(read.table("/home/dpatel/sequences/Bac/bac_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
+
+# Let's start by doing a dissimilarity matrix (Bray-Kurtis)
+beta_dist <- vegdist(ASV_table, method = "bray")
+write.csv(as.matrix(beta_dist), "/home/dpatel/sequences/Bac/bac_csv/dist_matrix.csv")
+beta_dist <- read.table("/home/dpatel/sequences/Bac/bac_csv/dist_matrix.csv", header=TRUE, sep=",", row.names = NULL,)
+
+```
+
+
+### Making a PCoA
+```{r}
+# Load the dissimilarity matrix
+beta_dist <- read.table("/home/dpatel/sequences/Bac/bac_csv/dist_matrix.csv", header=TRUE, sep=",", row.names = 1)
+
+# Perform PCoA analysis using the "cmdscale" function
+PCOA <- cmdscale(beta_dist, eig=TRUE, add=TRUE)
+
+# Extract the coordinate results from the PCOA
+pcoa_df <- data.frame(PCoA1 = PCOA$points[,1], PCoA2 = PCOA$points[,2], Sample = row.names(beta_dist))
+
+pcoa_df$SampleType <- ifelse(grepl("^F", pcoa_df$Sample), "Filter",
+                        ifelse(grepl("^R", pcoa_df$Sample), "Rock",
+                               ifelse(grepl("^T|^P", pcoa_df$Sample), "Field", "Other")))
+
+# Remove "R." and "F." from the sample names in the PCoA data frame and change the J of Jour to D (day)
+pcoa_df$Sample <- gsub("^R\\.|^F\\.", "", pcoa_df$Sample)
+pcoa_df$Sample <- gsub(".J", "-D", pcoa_df$Sample)
+
+
+# Modify the Sample column, keeping "P1", "P2", "P3", and "P4" unchanged
+pcoa_df$Sample <- ifelse(pcoa_df$Sample %in% c("P1", "P2", "P3", "P4"), pcoa_df$Sample, 
+                        str_replace(pcoa_df$Sample, "(\\d+)$", function(match) as.character(2 * as.numeric(match))))
+
+
+
+# Create a new column in the PCoA data frame that indicates the shape of each sample
+pcoa_df$Shape <- ifelse(grepl("^B", pcoa_df$Sample), "circle",
+                        ifelse(grepl("^J", pcoa_df$Sample), "diamond",
+                         ifelse(grepl("^R", pcoa_df$Sample), "square", "triangle")))
+pcoa_df$Sample<- gsub("Tourb", "Peat", pcoa_df$Sample)
+
+percent_explained=100*PCOA$eig/sum(PCOA$eig)
+reduced_percent=format(round(percent_explained[1:2], digits=2), nsmall=1, trim=TRUE) # reduce number of digits
+
+
+
+# Visualize the PCoA plot using ggplot
+p <- ggplot(pcoa_df, aes(x = PCoA1, y = PCoA2, color = SampleType, shape = Shape, label = Sample)) +
+  geom_point(size = 3.5) +
+  xlab(paste0("PCoA 1 (", reduced_percent[1], "% of variation)")) +
+  ylab(paste0("PCoA 2 (", reduced_percent[2], "% of variation)")) +
+  geom_text(hjust = 0, vjust = 0) +
+  theme(legend.position = "right") +  # move legend to the right
+  scale_color_manual(values = c("#116530","#21B6A8","#A45C40"), # Set colors
+                     name = "Sample Type") +  # define legend title and labels
+  scale_shape_manual(values = c(16, 17, 15, 18),  # Set the shape scheme
+                      labels = c("Bioreactor 1", "Bioreactor 2", "Bioreactor 3", "Field"), # Set the labels
+                     name = "Bioreactor") 
+  
+
+p + xlim(-0.5, 0.8) + # Set x-axis limits
+theme(text = element_text(size = 22), legend.text = element_text(size = 18))
+
+ggsave("/home/dpatel/sequences/Bac/bac_Figures/PCOA_beta4.tiff", width = 8, height = 6, plot = last_plot())
+
+```
+
+
+
+###### Correlation between our environmental factors and our beta diversity (PERMANOVA) ######
+### NO TERRAIN DATA
+### Loading all files needed here
+```{r}
+# Load ASV table and metadatas
+ASV_table <- t(read.table("~/sequences/Bac/bac_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
+metadata <- read.table("~/sequences/Bac/bac_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
+
+```
+
+
+### Doing some cleaning in the dataframes
+```{r}
+# Remove the mysterious "is.neg" column and remove the unecessary column in metadata 
+metadata <- metadata %>% select(-is.neg, -Rugosite1, -Rugosite2, -concADN)
+
+
+# Since our sample names differ in our ASV and Metadata table, we'll have to replace the "-" to "."
+# We'll also change the name of the first column to "Nom"
+metadata$X <- gsub("-", ".", metadata$X)
+colnames(metadata)[1] <- "Nom"
+
+```
+
+
+
+### PERMANOVA FOR FILTERS ###
+
+# After taking a look at the PCoA, we'll separate the data based on the Jours. 
+# So the days will be J1-J4, J5-J6 and J7-J12
+```{r}
+rm(list=ls())
+
+# Load ASV table and metadatas
+ASV_table <- t(read.table("~/sequences/Bac/bac_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
+metadata <- read.table("~/sequences/Bac/bac_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
+beta_dist <- read.table("/home/dpatel/sequences/Bac/bac_csv/dist_matrix.csv", header=TRUE, sep=",", row.names = NULL)
+colnames(beta_dist) <- c("Nom", beta_dist$X)
+```
+
+### Doing some cleaning in the dataframes
+```{r}
+# Remove the mysterious "is.neg" column and remove the unecessary column in metadata 
+metadata <- metadata %>% select(-is.neg, -Rugosite1, -Rugosite2, -concADN)
+
+# Since our sample names differ in our ASV and Metadata table, we'll have to replace the "-" to "."
+# We'll also change the name of the first column to "Nom"
+metadata$X <- gsub("-", ".", metadata$X)
+colnames(metadata)[1] <- "Nom"
+```
+
+### Doing the PERMANOVA (SEPARATE BASED ON JOURs)
+```{r}
+set.seed(123)
+# Separate the Filtres based on the Jours 
+meta14  <- metadata[metadata$Jour %in% c("2", "4", "6", "8"), ]
+meta56  <- metadata[metadata$Jour %in% c("10", "12"), ]
+meta711 <- metadata[metadata$Jour %in% c("14", "16", "18", "20","22"), ]
+
+# Now we have to join the metadata dataframes with the matrix and keep the lower half of the dist
+meta14_dist <- inner_join(meta14, beta_dist, by = "Nom")
+dist14 <- meta14_dist %>% select(all_of(meta14_dist$Nom)) %>% as.dist()
+
+meta56_dist <- inner_join(meta56, beta_dist, by = "Nom")
+dist56 <- meta56_dist %>% select(all_of(meta56_dist$Nom)) %>% as.dist()
+
+meta711_dist <- inner_join(meta711, beta_dist, by = "Nom")
+dist711 <- meta711_dist %>% select(all_of(meta711_dist$Nom)) %>% as.dist()
+
+
+# Run the adonis2 function and look at the results
+Corr14 <- adonis2(dist14 ~ Bioreacteur + Jour, data = meta14_dist, by="margin")
+print(Corr14)
+#              Df SumOfSqs     R2      F     Pr(>F)    
+# Bioreacteur  2  0.10429   0.19131  1.6162  0.082 .  
+# Jour         1  0.18274   0.33522  5.6641  0.001 ***
+# Residual     8  0.25810   0.47347                  
+# Total       11  0.54513   1.00000    
+
+Corr56 <- adonis2(dist56 ~ Bioreacteur + Jour, data = meta56_dist, by="margin")
+print(Corr56)
+#              Df  SumOfSqs     R2       F     Pr(>F)  
+# Bioreacteur  2  0.108084   0.52754  3.4987  0.01667 *
+# Jour         1  0.065905   0.32167  4.2666  0.01667 *
+# Residual     2  0.030893   0.15078                 
+# Total        5  0.204882   1.00000  
+
+Corr711 <- adonis2(dist711 ~ Bioreacteur + Jour, data = meta711_dist, by="margin")
+print(Corr711)
+#             Df  SumOfSqs     R2       F    Pr(>F)    
+# Bioreacteur  2  0.29413   0.32333  3.2372  0.002 ** 
+# Jour         1  0.24824   0.27288  5.4642  0.001 ***
+# Residual     8  0.36344   0.39951                  
+# Total       11  0.90970   1.00000   
+```
+
+### Doing the PERMANOVA (ALL FILTERS COMBINED)
+```{r}
+# Keeping the Filtres only
+meta_filter <- metadata[(metadata$SampleType == "Filtre"), ]
+meta_filter <- meta_filter[!(meta_filter$Bioreacteur == "Terrain"), ]
+
+# Now we have to join the metadata dataframes with the matrix and keep the lower half of the dist
+meta_dist <- inner_join(meta_filter, beta_dist, by = "Nom")
+dist <- meta_dist %>% select(all_of(meta_dist$Nom)) %>% as.dist()
+
+# Run the adonis2 function and look at the results
+Corr <- adonis2(dist ~ Bioreacteur + Jour, data = meta_dist, by="margin")
+print(Corr)
+#             Df  SumOfSqs     R2       F     Pr(>F)    
+# Bioreacteur  2   0.3631   0.08660   3.5476  0.009 ** 
+# Jour         1   2.4944   0.59482  48.7365  0.001 ***
+# Residual    26   1.3307   0.31732                   
+# Total       29   4.1936   1.00000    
+
+```
+
+
+### PERMANOVA FOR LIFESTYLE ###
+```{r}
+meta_dist <- inner_join(metadata, beta_dist, by = "Nom")
+dist <- meta_dist %>% select(all_of(meta_dist$Nom)) %>% as.dist()
+Corr <- adonis2(dist ~ SampleType, data = meta_dist, by="margin")
+print(Corr)
+
+```
+
+
+
+### PERMANOVA FOR ROCKS ###
+
+# Here, we're going to add the mineralogy with the metadata
+# Load ASV table and metadatas
+```{r}
+rm(list=ls())
+ASV_table <- t(read.table("~/sequences/Bac/bac_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
+metadata <- read.table("~/sequences/Bac/bac_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
+beta_dist <- read.table("/home/dpatel/sequences/Bac/bac_csv/dist_matrix.csv", header=TRUE, sep=",", row.names = NULL)
+colnames(beta_dist) <- c("Nom", beta_dist$X)
+```
+
+
+### Doing some cleaning in the dataframes
+```{r}
+# Remove the mysterious "is.neg" column and remove the unecessary column in metadata 
+metadata <- metadata %>% select(-is.neg, -concADN, -Jour)
+
+# Since our sample names differ in our ASV and Metadata table, we'll have to replace the "-" to "."
+# We'll also change the name of the first column to "Nom"
+metadata$X <- gsub("-", ".", metadata$X)
+colnames(metadata)[1] <- "Nom"
+
+```
+
+### Doing the PERMANOVA
+```{r}
+# Remove the 'Terrain' data 
+metadata <- metadata[metadata$SampleType == "Roche", ]
+
+# Now we have to join the metadata dataframe with the matrix and keep the lower half of the dist
+meta_dist <- inner_join(metadata, beta_dist, by = "Nom")
+all_dist <- meta_dist %>% select(all_of(meta_dist$Nom)) %>% as.dist()
+
+# Run the adonis2 function and look at the results
+Corr <- adonis2(all_dist ~ Bioreacteur, data = meta_dist, by="margin")
+print(Corr)
+#             Df  SumOfSqs    R2      F     Pr(>F)    
+#Bioreacteur  2   1.0687   0.45537 11.287  0.001 ***
+#Residual    27   1.2782   0.54463                  
+#Total       29   2.3469   1.00000                 
+```
+
+
+
+
+
+###### Doing a dbRDA ########
+
+# For the dbRDA, The ASV dataframe should have samples as rows and ASVs as columns
+# As for the metadata dataframe, it should have samples as rows and metadata variables as columns.
+
+
+### FILTERS ONLY
+
+### Loading dataframes and doing some cleaning
+```{r}
+rm(list=ls())
+
+# Load the ASV table and the metadata
+ASV_table <- t(read.table("~/sequences/Bac/bac_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
+metadata <- read.table("~/sequences/Bac/bac_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
+
+# Remove the mysterious "is.neg" column and remove the Rugosite1 and Rugosite2 because we don't need them
+metadata <- metadata %>% select(-is.neg,-Rugosite1,-Rugosite2)
+
+# Since our sample names differ in our ASV and Metadata table, we'll have to replace the "-" to "."
+# We'll also change the name of the first column to "Nom"
+metadata$X <- gsub("-", ".", metadata$X)
+colnames(metadata)[1] <- "Nom"
+
+# Taking all my Filter data from metadata
+Meta_filters_all <- metadata[(metadata$SampleType == "Filtre"), ]
+
+# Merging the geochemical data to the reste of our metadata.
+Analyse <- read.table("/home/dpatel/Analyse_geo_merged.csv", header=TRUE, sep=",", row.names = NULL)
+Meta_filters_all <- merge(Meta_filters_all, Analyse, by = c("Bioreacteur", "Jour"), sort = TRUE)
+
+# Change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+Meta_filters_all$Bioreacteur <- ifelse(grepl("^B", Meta_filters_all$Bioreacteur), "Bio1",
+                        ifelse(grepl("^J", Meta_filters_all$Bioreacteur), "Bio2",
+                         ifelse(grepl("^R", Meta_filters_all$Bioreacteur), "Bio3", "Field")))
+
+# Taking the ASV table and keeping the same samples as in the Filtres_noT_geo metadata.
+# We'll also transform the raw ASV data into relative abundance 
+ASV_table <- ASV_table[Meta_filters_all$Nom, ]
+ASV_table <- decostand(ASV_table, method = "hellinger")
+
+
+# Removing "F." from the sample names for the ASV table and the Meta_filters_all dataframe 
+rownames(ASV_table) <- gsub("F\\.", "", rownames(ASV_table))
+Meta_filters_all$Nom <- gsub("F\\.", "", Meta_filters_all$Nom)
+
+# Change the J of Jour to D (day)
+Meta_filters_all$Nom <- gsub(".J", "-D", Meta_filters_all$Nom)
+
+
+# Extract numbers from the end of Sample names and multiply by 2
+Meta_filters_all <- Meta_filters_all %>%
+mutate(Nom = str_replace(Nom, "(\\d+)$", function(match) as.character(2 * as.numeric(match))))
+
+```
+
+### Doing the Distance matrix and dbRDA 
+```{r}
+
+beta_dist <- vegdist(ASV_table, method = "bray")
+
+dbRDA_result <- capscale(beta_dist ~ Moy_DIC + Moy_DOC + Moy_NO2 + Moy_NOx + Moy_NH4 + Moy_NO3 + pH , data = Meta_filters_all)
+
+```
+
+### Looking at the plot
+```{r}
+# Doing a simple plot
+plot(dbRDA_result)
+```
+
+# Doing some statistical test
+```{r}
+set.seed(123)
+
+anova(dbRDA_result) 
+
+# test axes for significance
+anova(dbRDA_result, by = "axis", perm.max = 1000) 
+
+# test for significant variables from the matadata
+anova(dbRDA_result, by = "terms", permu = 1000) 
+
+summary(dbRDA_result)
+
+```
+
+### Ok, Let's see if we can simplify our dbRDA
+```{r}
+#So step() is going to find the simplest models we can have: taking away variables that aren't too important
+mod1 <- step(dbRDA_result, scope = formula(dbRDA_result), criteria = "AIC", test = "perm", direction = "both") 
+summary(mod1)
+
+mod2 <- capscale(beta_dist ~ Moy_DIC + Moy_NH4, data = Meta_filters_all)
+```
+
+### Doing statistical analysis on the simpler model
+```{r}
+# Set a random seed for reproducibility
+set.seed(123) 
+
+# Looking for some collinearity
+vif.cca(mod2)
+### Generally, VIF values greater than 5 or 10 are considered indicative of significant collinearity.
+### Ok, so we don't see any "inflation" in the numbers so there isn't any collinearity
+
+# test axes for significance
+anova(mod2, by = "axis", perm.max = 1000) 
+
+# test for significant variables from the metadata
+anova(mod2, by = "terms", permu = 1000) 
+#         Df SumOfSqs      F Pr(>F)   
+#Moy_DIC   1  0.41656 3.8056  0.003 **
+#Moy_NH4   1  0.20453 1.8685  0.056 . 
+#Residual 21  2.29864 
+
+#summary(mod2)
+
+#plot(mod2)
+   
+```
+
+### Plotting
+```{r}
+
+# Extract the site scores from dbRDA result
+site_scores <- scores(mod2, display = "sites")
+site_scores_df <- as.data.frame(site_scores)
+
+# Extract the variable scores from dbRDA result
+variable_scores <- scores(mod2, display = "bp")
+variable_scores_df <- as.data.frame(variable_scores)
+
+# Get the dimension names from the site scores
+dim_names <- colnames(site_scores_df)
+
+# Calculate the eigenvalues of the dbRDA result
+eigenvals <- eigenvals(mod2)
+
+# Calculate the percentage of variance explained by each dimension
+var_explained <- eigenvals / sum(eigenvals) * 100
+
+# Create a dataframe combining site scores and metadata
+plot_data <- cbind.data.frame(site_scores_df, Meta_filters_all)
+
+dbRDAfilter <-ggplot() +
+  geom_point(data = plot_data, aes(x = CAP1, y = CAP2, color = Bioreacteur), size = 2) + #adding the points of our sample
+  scale_color_manual(values = c("#21B6A8","#A45C40","#116530"), name = "Bioreactor",) + 
+  
+  geom_segment(data = variable_scores_df, aes(x = 0, y = 0, xend = CAP1, yend = CAP2), 
+               arrow = arrow(length = unit(0.15, "cm")), color = "black") + #adding the arrows for the environmental variables
+  xlab(paste(dim_names[1], " (", round(var_explained[1], 2), "%)")) + #naming the x axis
+  ylab(paste(dim_names[2], " (", round(var_explained[2], 2), "%)")) + #naming the y axis
+  geom_hline(yintercept = 0, linetype = "solid", color = "gray") + #adding dashed lines on the x axis
+  geom_vline(xintercept = 0, linetype = "solid", color = "gray") + #adding dashed lines on the x axis
+  geom_text(data = plot_data, aes(x = CAP1, y = CAP2, label = Nom), hjust = 0.5, vjust = -0.5, size = 3.5) + #adding the sample name
+  theme_minimal() +
+  theme(text = element_text(size = 15)) 
+
+dbRDAfilter
+ggsave("/home/dpatel/sequences/Bac/bac_Figures/Bac_dbRDA_filter.jpeg", width = 6, height = 4, plot = last_plot())
+
+```
+
+
+### Doing a variance partitioning
+```{r}
+
+varpart_result <- varpart(ASV_table, ~ Moy_DIC, ~ Moy_NH4, data = Meta_filters_all)
+
+varpart_result
+
+```
+
+
+
+
+
+
+### ROCKS ONLY
+
+### Loading dataframes and doing some cleaning
+
+### Loading all files needed here
+```{r}
+rm(list=ls())
+
+# Load ASV table and metadatas
+ASV_table <- t(read.table("~/sequences/Bac/bac_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
+metadata <- read.table("~/sequences/Bac/bac_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
+mineral <-read.table("~/Mineralogie_geo_merged.csv", header=TRUE, sep=",", row.names = NULL)
+
+```
+
+
+
+### Doing some cleaning in the dataframes
+```{r}
+
+# Since our sample names differ in our ASV and Metadata table, we'll have to replace the "-" to "."
+# We'll also change the name of the first column to "Nom"
+metadata$X <- gsub("-", ".", metadata$X)
+colnames(metadata)[1] <- "Nom"
+
+# Since our mineralogy is in percentage, we'll divide the values by 100.
+mineral <- mineral %>% mutate_at(vars(X.IronOxide, X.Quartz, X.BlackQuartz, X.RedFeldpath, X.WhiteFeldpath, X.Mica, X.Undetermined), ~ . / 100)
+
+# Also, since BlackQuartz and Quartz have the same molecular composition, we're going to add them into the Quartz column.
+mineral <- mineral %>% mutate(X.Quartz = X.Quartz + X.BlackQuartz)
+
+```
+
+### Merging the metadata and mineral dataframes
+```{r}
+
+# Merging metadata with mineral dataframe so everything is together
+# We'll then just keep the Roche samples
+meta_mineral <- merge(metadata, mineral, by = "Nom", all.x = TRUE)
+
+meta_mineral <- meta_mineral[(meta_mineral$SampleType == "Roche"), ]
+
+# Remove the mysterious "is.neg" column and remove the Rugosite1 and Rugosite2 in Metadata since they will be in the Mineral dataframe
+meta_mineral <- meta_mineral %>% select(-is.neg, -Rugosite1, -Rugosite2, -X.BlackQuartz, -Total, -Jour, -SampleType, -concADN)
+
+# Change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+meta_mineral$Bioreacteur <- ifelse(grepl("^B", meta_mineral$Bioreacteur), "Bio1",
+                        ifelse(grepl("^J", meta_mineral$Bioreacteur), "Bio2",
+                         ifelse(grepl("^R", meta_mineral$Bioreacteur), "Bio3", "")))
+
+```
+
+# Taking the ASV table and keeping the same samples as in the meta_mineral metadata
+```{r}
+
+ASV_table <- ASV_table[meta_mineral$Nom, ]
+
+# Removing "R." from the sample names for the meta_mineral dataframe 
+meta_mineral$Nom <- gsub("R\\.", "", meta_mineral$Nom)
+
+# We'll also transform the raw ASV data into relative abundance 
+ASV_table <- decostand(ASV_table, method = "hellinger")
+```
+
+
+### Doing the Distance matrix and dbRDA 
+```{r}
+beta_dist <- vegdist(ASV_table, method = "bray")
+
+dbRDA_result <- capscale(beta_dist ~ X.IronOxide + X.Quartz + X.RedFeldpath + X.WhiteFeldpath + X.Mica + X.Undetermined + Roughness, data = meta_mineral)
+
+
+```
+
+### Looking at the plot
+```{r}
+# Doing a simple plot
+plot(dbRDA_result)
+```
+
+# Doing some statistical test
+```{r}
+set.seed(123)
+
+anova(dbRDA_result) 
+
+# test axes for significance
+anova(dbRDA_result, by="axis", perm.max=1000) 
+
+# test for significant variables from the matadata
+anova(dbRDA_result, by="terms", permu=1000) 
+
+summary(dbRDA_result)
+
+```
+
+### Ok, Let's see if we can simplify our dbRDA
+```{r}
+set.seed(123)
+#So step() is going to find the simplest models we can have
+mod1 <- step(dbRDA_result, scope = formula(dbRDA_result), test = "perm") 
+summary(mod1)
+
+# Looking for some collinearity
+vif.cca(mod1)
+###Ok, so we see an "inflation" in the numbers so there is collinearity
+
+mod2 <- capscale(beta_dist ~ X.Quartz + X.RedFeldpath + X.Mica + Roughness, data = meta_mineral)
+#summary(mod2)
+vif.cca(mod2)
+anova(mod2, by="terms", permu=1000)
+#plot(mod1)
+plot(mod2)
+#plot(dbRDA_result)
+```
+
+
+### Doing statistical analysis on the simpler model
+```{r}
+predictor_vars <- scores(mod2, display = "sites")
+cor_matrix <- cor(predictor_vars)
+corrplot::corrplot(cor_matrix, method = "circle")
+vif_values <- vegan::vif.cca(mod2)
+
+```
+
+### Plotting
+```{r}
+# Extract the site scores from dbRDA result
+site_scores <- scores(mod2, display = "sites")
+site_scores_df <- as.data.frame(site_scores)
+
+# Extract the variable scores from dbRDA result
+variable_scores <- scores(mod2, display = "bp")
+variable_scores_df <- as.data.frame(variable_scores)
+
+# Get the dimension names from the site scores
+dim_names <- colnames(site_scores_df)
+
+# Calculate the eigenvalues of the dbRDA result
+eigenvals <- eigenvals(mod2)
+
+# Calculate the percentage of variance explained by each dimension
+var_explained <- eigenvals / sum(eigenvals) * 100
+
+# Create a dataframe combining site scores and metadata
+plot_data <- cbind.data.frame(site_scores_df, meta_mineral)
+
+dbrdarock <- ggplot() +
+  geom_hline(yintercept = 0, linetype = "solid", color = "gray") + #adding dashed lines on the x axis
+  geom_vline(xintercept = 0, linetype = "solid", color = "gray") + #adding dashed lines on the x axis
+  geom_point(data = plot_data, aes(x = CAP1, y = CAP2, color = Bioreacteur), size = 2) + #adding the points of our sample
+  geom_segment(data = variable_scores_df, aes(x = 0, y = 0, xend = CAP1, yend = CAP2), 
+               arrow = arrow(length = unit(0.15, "cm")), color = "black") + #adding the arrows for the environmental variables
+  scale_color_manual(values = c("#21B6A8","#A45C40","#116530"), name = "Bioreactor",) + 
+  xlab(paste(dim_names[1], " (", round(var_explained[1], 2), "%)")) + #naming the x axis
+  ylab(paste(dim_names[2], " (", round(var_explained[2], 2), "%)")) + #naming the y axis
+  geom_text(data = plot_data, aes(x = CAP1, y = CAP2, label = Nom), hjust = 0.5, vjust = -0.5, size = 3.5) + #adding the sample name
+  theme_minimal() +
+  theme(text = element_text(size = 15)) 
+
+dbrdarock
+ggsave("/home/dpatel/sequences/Bac/bac_Figures/Bac_dbRDA_rock.jpeg", width = 6, height = 4, plot = last_plot())
+
+```
+
+### Doing a variance partitioning
+```{r}
+
+varpart_result <- varpart(ASV_table, ~ X.IronOxide, ~X.Quartz, ~ X.RedFeldpath + X.WhiteFeldpath, ~ X.Mica , data = meta_mineral)
+varpart_result
+
+```
+
+
+

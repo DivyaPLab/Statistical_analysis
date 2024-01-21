@@ -1,0 +1,229 @@
+---
+title: "Test Venn Diagram"
+author: "Divya"
+date: "2023-04-18"
+output: html_document
+---
+#### ---------- BACTERIA ---------- ####
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load libraries 
+library(ggplot2)
+library(dplyr)
+library(phyloseq)
+library(ggvenn)
+library(tibble)
+library(VennDiagram)
+library(plyr)
+library(gplots)
+library(ggVennDiagram)
+```
+
+
+### Loading all files needed here 
+```{r}
+rm(list=ls())
+asv <- read.table("~/sequences/Bac/bac_csv/rarefied_asv.csv", sep=",", row.names=1, header=TRUE, check.names=FALSE) 
+asv <- data.frame(t(asv))
+meta <- read.table("~/sequences/Bac/bac_csv/rarefied_meta.csv", sep=",", row.names=1, header=TRUE) 
+meta <- meta[1:3] # Keep only first 3 columns 
+df <- merge(meta,asv, by=0)
+
+```
+
+### Working on the dataframes
+```{r}
+# Remove the Terrain data
+df <- df[!(df$Bioreacteur == "Terrain"), ]
+
+# Set the sample names as the Row.names
+row.names(df) <- df$Row.names 
+
+# Removing unecessary columns
+df <- df %>% select(-Row.names,-Bioreacteur,-Jour) 
+
+# Aggregate based on the SampleType
+agg <- aggregate(x = df[, colnames(df) !="SampleType"], 
+                by = list(df$SampleType),
+                FUN = sum)
+
+# Set first column as row names and remove first column
+row.names(agg) <- agg$Group.1 
+agg <- agg[-c(1)]
+
+# Translation of the agg dataframe
+agg <- as.data.frame(t(agg))
+
+```
+
+### Putting the Genus in the dataframe
+```{r}
+taxa = read.table("/home/dpatel/sequences/Bac/bac_csv/rarefied_taxa.csv", sep=",", row.names=1, header=TRUE) 
+taxa = taxa[6] # Keep only the Genus column
+
+# Merge taxa so we can have the Genus with the proper ASV.
+genus <- merge(agg, taxa, by=0)
+
+# Replace values greater than 0 with values from "Genus" column
+genus$Filtre[genus$Filtre > 0] <- genus$Genus[genus$Filtre > 0]
+genus$Filtre[genus$Filtre == 0] <- NA
+genus$Roche[genus$Roche > 0] <- genus$Genus[genus$Roche > 0]
+genus$Roche[genus$Roche == 0] <- NA
+
+# Remove "Row.name" and "Genus" columns
+genus <- genus[, !(colnames(genus) %in% c("Row.names", "Genus"))]
+
+# Remove rows with NA values in both "Filtre" and "Roche" columns
+genus <- genus[!(is.na(genus$Filtre) & is.na(genus$Roche)), ]
+
+# Remove duplicates in "Filtre" and "Roche" columns
+genus <- genus[!duplicated(genus[c("Filtre", "Roche")]), ]
+
+```
+
+### Plotting the Venn diagram (WITHOUT the Terrain data)
+```{r}
+library(VennDiagram)
+venn <- Venn(genus)
+data <- process_data(venn)
+
+# Create new column with percentage 
+data@region=data@region %>% add_column(percent=data@region$count/sum(data@region$count)*100) 
+# Round to no digits
+data@region$percent = round(data@region$percent, digits=1) 
+# Add percentage sign (%)
+data@region$percent=paste0(data@region$percent,"%")  
+
+# Add a new column to your data with the fill colors
+data@region <- data@region %>% add_column(fill = c("#BDF0E2", "#D8CFEE", "#C7CBE6"))
+
+
+# Plot the Venn diagram using ggplot2
+ggplot() +
+  geom_sf(data = venn_region(data), aes(fill = fill), show.legend = FALSE) + 
+  scale_fill_identity() +
+  geom_sf(data = venn_setedge(data), size = 10) +   
+  geom_sf_text(aes(label = c("Planktonic ","Sessile")), data = venn_setlabel(data), size = 5) +
+  geom_sf_label(aes(label = percent), data = venn_region(data), alpha = 0, label.size = NA, size = 5) +
+  theme_void()
+
+ggsave("/home/dpatel/sequences/Bac/bac_Figures/Veen_Genus_Bac.jpeg", width = 4, height = 4, plot = last_plot())
+
+
+```
+
+### Checking which genus is in which category
+```{r}
+list_genus <- as.list(genus)
+tmp <- venn(list_genus)
+attr(tmp, "intersections")
+```
+
+
+
+
+#### ---------- EUCARYOTES ---------- ####
+
+### Loading all files needed here 
+```{r}
+rm(list=ls())
+asv=read.table("~/sequences/Euc/euc_csv/rarefied_asv.csv", sep=",", row.names=1, header=TRUE, check.names=FALSE) 
+tasv=data.frame(t(asv))
+meta=read.table("~/sequences/Euc/euc_csv/rarefied_meta.csv", sep=",", row.names=1, header=TRUE) 
+meta=meta[1:3] # Keep only first 3 columns 
+df=merge(meta,tasv, by=0)
+
+```
+
+
+### Working on the dataframes
+```{r}
+# Remove the Terrain data
+df <- df[!(df$Bioreacteur == "Terrain"), ]
+
+# Set the sample names as the Row.names
+row.names(df) <- df$Row.names 
+
+# Removing unecessary columns
+df <- df %>% select(-Row.names,-Bioreacteur,-Jour) 
+
+# Aggregate based on the SampleType
+agg <- aggregate(x = df[, colnames(df) !="SampleType"], 
+                by = list(df$SampleType),
+                FUN = sum)
+
+# Set first column as row names and remove first column
+row.names(agg) <- agg$Group.1 
+agg <- agg[-c(1)]
+
+# Translation of the agg dataframe
+agg <- as.data.frame(t(agg))
+```
+
+### Putting the Genus in the dataframe
+```{r}
+taxa = read.table("/home/dpatel/sequences/Euc/euc_csv/rarefied_taxa.csv", sep=",", row.names=1, header=TRUE) 
+taxa = taxa[6] # Keep only the Genus column
+
+# Merge taxa so we can have the Genus with the proper ASV.
+genus <- merge(agg, taxa, by=0)
+
+# Replace values greater than 0 with values from "Genus" column
+genus$Filtre[genus$Filtre > 0] <- genus$Genus[genus$Filtre > 0]
+genus$Filtre[genus$Filtre == 0] <- NA
+genus$Roche[genus$Roche > 0] <- genus$Genus[genus$Roche > 0]
+genus$Roche[genus$Roche == 0] <- NA
+
+# Remove "Row.name" and "Genus" columns
+genus <- genus[, !(colnames(genus) %in% c("Row.names", "Genus"))]
+
+# Remove rows with NA values in both "Filtre" and "Roche" columns
+genus <- genus[!(is.na(genus$Filtre) & is.na(genus$Roche)), ]
+
+# Remove duplicates in "Filtre" and "Roche" columns
+genus <- genus[!duplicated(genus[c("Filtre", "Roche")]), ]
+
+```
+
+### Plotting the Venn diagram (WITHOUT the Terrain data)
+```{r}
+venn <- Venn(genus)
+data <- process_data(venn)
+
+# Create new column with percentage 
+data@region=data@region %>% add_column(percent=data@region$count/sum(data@region$count)*100) 
+# Round to no digits
+data@region$percent = round(data@region$percent, digits=1) 
+# Add percentage sign (%)
+data@region$percent=paste0(data@region$percent,"%")  
+
+# Add a new column to your data with the fill colors
+data@region <- data@region %>% add_column(fill = c("#BDF0E2", "#D8CFEE", "#C7CBE6"))
+
+
+# Plot the Venn diagram using ggplot2
+ggplot() +
+  geom_sf(data = venn_region(data), aes(fill = fill), show.legend = FALSE) + 
+  scale_fill_identity() +
+  geom_sf(data = venn_setedge(data), size = 10) +   
+  geom_sf_text(aes(label = c("Planktonic ","Sessile")), data = venn_setlabel(data), size = 5) +
+  geom_sf_label(aes(label = percent), data = venn_region(data), alpha = 0, label.size = NA, size = 5) +
+  theme_void()
+
+#ggsave("/home/dpatel/sequences/Euc/euc_Figures/Veen_Genus_Euc.jpeg", width = 4, height = 4, plot = last_plot())
+#ggsave("/home/dpatel/sequences/Euc/euc_Figures/Veen_Genus_Euc.jpeg", plot=plot, width=16.5, height=16.5,units="cm")
+
+list_genus <- as.list(genus)
+tmp <- venn(list_genus)
+attr(tmp, "intersections")
+
+```
+
+### Checking which genus is in which category
+```{r}
+list_genus <- as.list(genus)
+tmp <- venn(list_genus)
+attr(tmp, "intersections")
+```
+

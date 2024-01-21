@@ -1,0 +1,439 @@
+---
+title: "Feast2"
+author: "Divya"
+date: "2023-09-12"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/home/dpatel/sequences")
+
+rm(list=ls())
+```
+
+### Load libraries
+```{r}
+#Installing and loading required libraries to install FEAST
+Packages <- c("Rcpp", "RcppArmadillo", "vegan", "dplyr", "reshape2", "gridExtra", "ggplot2", "ggthemes", "devtools")
+install.packages(Packages)
+lapply(c("Rcpp", "RcppArmadillo", "vegan", "dplyr", "reshape2", "gridExtra", "ggplot2", "ggthemes", "devtools"), require, character.only = TRUE)
+ 
+
+#installing Feast package 
+devtools::install_github("cozygene/FEAST") 
+
+#Opening the rest of the libraries
+library(FEAST)
+library(reshape)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(stringr)
+```
+
+
+### Load count table and metadata
+```{r}
+raw_asv <- read.table("~/sequences/Bac/bac_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ",", check.names=FALSE) 
+feast_meta <- read.csv("~/sequences/Bac/bac_csv/Feast2.csv", header = FALSE, sep = ",", check.names=FALSE, row.names=NULL)
+
+# Removing empty and NA cells
+meta_clean <- feast_meta[!apply(is.na(feast_meta) | feast_meta == "", 1, all),] 
+
+```
+
+### FEAST
+```{r}
+
+for (variable in unique(meta_clean$V1)){
+  sink_and_source=subset(meta_clean, V1==variable) # Extract from the metadata file the analysis to be done. 
+  names(sink_and_source)=sink_and_source[1,] # Set first row as header
+  sink_and_source=sink_and_source[-1,-1] # Delete first row and column
+  # The metadata is now ready to be used with FEAST
+  # Extract samples included in the metadata from the count matrix 
+  rownames(sink_and_source) <- sink_and_source[,1] # set the first column containing the sample ID as row names 
+  common.sample.ids <- intersect(rownames(t(raw_asv)), rownames(sink_and_source)) # Identify common samples between ASV and metadata
+  asv <- t(raw_asv)[common.sample.ids,] # Extract from the asv table only the samples listed in common.sample.ids
+  # The ASV and metadata tables are now ready for FEAST 
+  FEAST_output = FEAST(C = asv, metadata = sink_and_source, different_sources_flag = 0, dir_path="~/sequences/Bac/Feast_result", outfile=variable)
+} 
+
+```
+
+### Bar plot
+# Change path for the directory where the output from FEAST were saved
+```{r}
+dir="~/sequences/Bac/Feast_result" # set path to where the output from FEAST were saved 
+file_names <- list.files(dir, full.names = T) # list the names of all the files in that directory 
+
+df=data.frame() # generate empty data frame 
+
+for (out_feast in unique(file_names)){
+  out_df=read.csv(out_feast,sep="\t") # read csv 
+  out_df <- out_df %>% tibble::rownames_to_column(var="Sink") # Set row name as first column values
+  df_melt=melt(out_df, id=c("Sink")) # Melt to long format
+  df=rbind(df,df_melt) # Populate empty data frame 
+} 
+
+df=na.omit(df) # remove rows with NA 
+
+# Change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+df$Bioreactor <- ifelse(grepl("^F-B-", df$Sink), "Bioreactor 1",
+                 ifelse(grepl("^F-J-", df$Sink), "Bioreactor 2",
+                 ifelse(grepl("^F-R-", df$Sink), "Bioreactor 3",
+                 ifelse(grepl("^R-B",  df$Sink), "Bioreactor 1", 
+                 ifelse(grepl("^R-J",  df$Sink), "Bioreactor 2",
+                 ifelse(grepl("^R-R",  df$Sink), "Bioreactor 3","Field"))))))
+
+df <- separate(df, Sink, into = c("Name", "Sample"), sep = "_", remove = FALSE)
+
+
+df$Sink <- gsub("F-", "", df$Sink)
+df$Sink <- gsub("R-B", "B", df$Sink)
+df$Sink <- gsub("R-R", "R", df$Sink)
+modify_value <- function(value) {
+  ifelse(endsWith(value, "_rock"), sub("R-", "", value, fixed = TRUE), value)
+}
+# Apply the function using dplyr
+df <- df %>%
+  mutate(Sink = modify_value(Sink))
+
+df$Sink <- gsub("-J", "-D", df$Sink)
+
+
+# Extract numbers in the format "X-D2_water" and multiply by 2 (where X can be any letter)
+df <- df %>%
+  mutate(Sink = str_replace_all(Sink, "([BJR])-D(\\d+)_water", function(match) {
+    number <- as.numeric(sub("([BJR])-D(\\d+)_water", "\\2", match))
+    if (!is.na(number)) {
+      paste0(sub("([BJR])-D(\\d+)_water", "\\1-D", match), 2 * number, "_water")
+    } else {
+      match
+    }
+  }))
+
+
+df$variable <- gsub("F.", "", df$variable)
+df$variable <- gsub("R.B", "B", df$variable)
+df$variable <- gsub("R.R", "R", df$variable)
+df$variable <- gsub(".J", "-D", df$variable)
+
+df <- df %>%
+  mutate(variable = str_replace_all(variable, "([BJR])-D(\\d+)_water", function(match) {
+    number <- as.numeric(sub("([BJR])-D(\\d+)_water", "\\2", match))
+    if (!is.na(number)) {
+      paste0(sub("([BJR])-D(\\d+)_water", "\\1-D", match), 2 * number, "_water")
+    } else {
+      match
+    }
+  }))
+
+
+```
+
+
+```{r}
+df$Sink <- factor(df$Sink, 
+          c("B-D2_water","B-D4_water","B-D6_water","B-D8_water","B-D10_water","B-D12_water","B-D14_water","B-D16_water","B-D18_water","B-D22_water",
+            "J-D2_water","J-D4_water","J-D6_water","J-D8_water","J-D10_water","J-D12_water","J-D14_water","J-D16_water","J-D18_water","J-D22_water",
+            "R-D2_water","R-D4_water","R-D6_water","R-D8_water","R-D10_water","R-D12_water","R-D14_water","R-D16_water","R-D18_water","R-D20_water",
+            "B1B_rock","B5B_rock","B7B_rock","B8B_rock","B2M_rock","B3M_rock","B4M_rock","B6M_rock","B1H_rock","B3H_rock","B6H_rock","B7H_rock",
+            "J3B_rock","J7B_rock","J8B_rock","J1M_rock","J3M_rock","J7M_rock","J8M_rock","J2H_rock","J4H_rock","J6H_rock",
+            "R1B_rock","R2B_rock","R5B_rock","R7B_rock","R2M_rock","R3M_rock","R6M_rock","R7M_rock","R1H_rock","R4H_rock","R5H_rock","R8H_rock"))
+
+df$variable <- factor(df$variable, c("P1_well", "P2_well","P3_well","P4_well", "Unknown", 
+            "B-D2_water","B-D4_water","B-D6_water","B-D8_water","B-D10_water","B-D12_water","B-D14_water","B-D16_water","B-D18_water","B-D22_water",
+            "J-D2_water","J-D4_water","J-D6_water","J-D8_water","J-D10_water","J-D12_water","J-D14_water","J-D16_water","J-D18_water","J-D22_water",
+            "R-D2_water","R-D4_water","R-D6_water","R-D8_water","R-D10_water","R-D12_water","R-D14_water","R-D16_water","R-D18_water","R-D20_water"))
+
+palette <- c("#6a040f","#DA4749","#FFA07B","#F24D3C","#0a0908","#bc3908","#F66308","#ff9a00","#ffc300","#F9D984",
+             "#ADC178","#6a994e","#17633F","#88d4ab","#568259","#14746f","#3ab795","#0d5c63","#b8f2e6","#82c0cc",
+             "#0a9396","#BFD7EA","#3D405B","#FFE5FF","#AF75A0","#89023E","#ffadc7","#e27396","#6F4D79","#dabfff",
+             "#944bbb","#C88FEB","#592e83","#c38e70","#582f0e","#A0785A","#49111c")
+# Generate plot 
+Feast = ggplot(df, aes(x = Sink, fill=variable, y=value)) + 
+        geom_bar(stat="identity") +
+        theme(text = element_text(size = 20), 
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+        scale_fill_manual(values=c(palette))+
+        guides(fill=guide_legend(title="Sources", nrow= 36)) +
+        facet_grid(cols = vars(df$Bioreactor), scales="free", margins = FALSE, drop = F)
+
+Feast
+
+ggsave("/home/dpatel/sequences/Bac/bac_Figures/Bac_Feast.jpeg", width = 24, height = 12, plot = last_plot())
+```
+
+
+
+
+
+
+
+
+####---- EUCARYOTE ----####
+### Load count table and metadata
+```{r}
+rm(list=ls())
+
+raw_asv <- read.table("~/sequences/Euc/euc_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ",", check.names=FALSE) 
+feast_meta <- read.csv("~/sequences/Euc/euc_csv/Feast2.csv", header = FALSE, sep = ",", check.names=FALSE, row.names=NULL)
+
+# Removing empty and NA cells
+meta_clean <- feast_meta[!apply(is.na(feast_meta) | feast_meta  == "", 1, all),] 
+
+```
+
+### FEAST
+```{r}
+setwd("~/sequences/Euc/Feast_results")
+for (variable in unique(meta_clean$V1)){
+  sink_and_source=subset(meta_clean, V1==variable) # Extract from the metadata file the analysis to be done. 
+  names(sink_and_source)=sink_and_source[1,] # Set first row as header
+  sink_and_source=sink_and_source[-1,-1] # Delete first row and column
+  # The metadata is now ready to be used with FEAST
+  # Extract samples included in the metadata from the count matrix 
+  rownames(sink_and_source) <- sink_and_source[,1] # set the first column containing the sample ID as row names 
+  common.sample.ids <- intersect(rownames(t(raw_asv)), rownames(sink_and_source)) # Identify common samples between ASV and metadata
+  asv <- t(raw_asv)[common.sample.ids,] # Extract from the asv table only the samples listed in common.sample.ids
+  # The ASV and metadata tables are now ready for FEAST 
+  FEAST_output = FEAST(C = asv, metadata = sink_and_source, different_sources_flag = 0, dir_path="~/sequences/Euc/Feast_result", outfile=variable)
+} 
+
+```
+
+### Bar plot
+# Change path for the directory where the output from FEAST were saved
+```{r}
+dir="~/sequences/Euc/Feast_result" # set path to where the output from FEAST were saved 
+file_names <- list.files(dir, full.names = T) # list the names of all the files in that directory 
+
+df=data.frame() # generate empty data frame 
+
+for (out_feast in unique(file_names)){
+  out_df=read.csv(out_feast,sep="\t") # read csv 
+  out_df <- out_df %>% tibble::rownames_to_column(var="Sink") # Set row name as first column values
+  df_melt=melt(out_df, id=c("Sink")) # Melt to long format
+  df=rbind(df,df_melt) # Populate empty data frame 
+} 
+
+df=na.omit(df) # remove rows with NA 
+
+# Change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+df$Bioreactor <- ifelse(grepl("^F-B-", df$Sink), "Bioreactor 1",
+                 ifelse(grepl("^F-J-", df$Sink), "Bioreactor 2",
+                 ifelse(grepl("^F-R-", df$Sink), "Bioreactor 3",
+                 ifelse(grepl("^R-B",  df$Sink), "Bioreactor 1", 
+                 ifelse(grepl("^R-J",  df$Sink), "Bioreactor 2",
+                 ifelse(grepl("^R-R",  df$Sink), "Bioreactor 3","Field"))))))
+
+df <- separate(df, Sink, into = c("Name", "Sample"), sep = "_", remove = FALSE)
+
+
+df$Sink <- gsub("F-", "", df$Sink)
+df$Sink <- gsub("R-B", "B", df$Sink)
+df$Sink <- gsub("R-R", "R", df$Sink)
+modify_value <- function(value) {
+  ifelse(endsWith(value, "_rock"), sub("R-", "", value, fixed = TRUE), value)
+}
+# Apply the function using dplyr
+df <- df %>%
+  mutate(Sink = modify_value(Sink))
+
+df$Sink <- gsub("-J", "-D", df$Sink)
+
+
+# Extract numbers in the format "X-D2_water" and multiply by 2 (where X can be any letter)
+df <- df %>%
+  mutate(Sink = str_replace_all(Sink, "([BJR])-D(\\d+)_water", function(match) {
+    number <- as.numeric(sub("([BJR])-D(\\d+)_water", "\\2", match))
+    if (!is.na(number)) {
+      paste0(sub("([BJR])-D(\\d+)_water", "\\1-D", match), 2 * number, "_water")
+    } else {
+      match
+    }
+  }))
+
+
+df$variable <- gsub("F.", "", df$variable)
+df$variable <- gsub("R.B", "B", df$variable)
+df$variable <- gsub("R.R", "R", df$variable)
+df$variable <- gsub(".J", "-D", df$variable)
+
+df <- df %>%
+  mutate(variable = str_replace_all(variable, "([BJR])-D(\\d+)_water", function(match) {
+    number <- as.numeric(sub("([BJR])-D(\\d+)_water", "\\2", match))
+    if (!is.na(number)) {
+      paste0(sub("([BJR])-D(\\d+)_water", "\\1-D", match), 2 * number, "_water")
+    } else {
+      match
+    }
+  }))
+
+
+```
+
+
+```{r}
+df$Sink <- factor(df$Sink, c( 
+            "B-D2_water","B-D6_water","B-D10_water","B-D14_water","B-D18_water",
+            "J-D2_water","J-D4_water","J-D6_water","J-D10_water","J-D12_water","J-D14_water","J-D16_water","J-D18_water","J-D22_water",
+            "R-D4_water","R-D6_water","R-D10_water","R-D12_water","R-D14_water","R-D16_water","R-D18_water","R-D20_water",
+            "B1B_rock","B7B_rock","B8B_rock","B3M_rock","B4M_rock","B6M_rock","B1H_rock","B6H_rock","B7H_rock",
+            "J1B_rock","J3B_rock","J7B_rock","J8B_rock",
+            "R2M_rock","R3M_rock","R7M_rock"))
+
+df$variable <- factor(df$variable, c("P1_well", "P2_well","P3_well","P4_well", "Unknown",
+            "B-D2_water","B-D6_water","B-D10_water","B-D14_water","B-D18_water",
+            "J-D2_water","J-D4_water","J-D6_water","J-D10_water","J-D12_water","J-D14_water","J-D16_water","J-D18_water","J-D22_water",
+            "R-D4_water","R-D6_water","R-D10_water","R-D12_water","R-D14_water","R-D16_water","R-D18_water","R-D20_water"))
+
+palette <- c("#6a040f","#DA4749","#FFA07B","#F24D3C","#0a0908","#bc3908","#F66308","#ff9a00","#ffc300","#F9D984",
+             "#ADC178","#6a994e","#17633F","#88d4ab","#568259","#14746f","#3ab795","#0d5c63","#b8f2e6",
+             "#BFD7EA","#3D405B","#FFE5FF","#AF75A0","#89023E","#ffadc7","#e27396","#6F4D79")
+
+# Generate plot 
+Feast = ggplot(df, aes(x = Sink, fill=variable, y=value)) + 
+        geom_bar(stat="identity") +
+        theme(text = element_text(size = 20), 
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+        scale_fill_manual(values=c(palette))+
+        guides(fill=guide_legend(title="Sources", nrow= 28)) +
+        facet_grid(cols = vars(df$Bioreactor), scales="free", margins = FALSE, drop = F)
+
+Feast
+
+ggsave("/home/dpatel/sequences/Euc/euc_Figures/Euc_Feasts.jpeg", width = 24, height = 12, plot = last_plot())
+```
+
+
+
+
+
+
+####---- ARCHAEA ----####
+### Load count table and metadata
+```{r}
+rm(list=ls())
+
+raw_asv <- read.table("~/sequences/Arc/arc_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ",", check.names=FALSE) 
+feast_meta <- read.csv("~/sequences/Arc/arc_csv/Feast_arc2.csv", header = FALSE, sep = ",", check.names=FALSE, row.names=NULL)
+
+# Removing empty and NA cells
+meta_clean <- feast_meta[!apply(is.na(feast_meta) | feast_meta == "", 1, all),] 
+
+
+```
+
+### FEAST
+```{r}
+setwd("~/sequences/Arc/Feast_results")
+for (variable in unique(meta_clean$V1)){
+  sink_and_source=subset(meta_clean, V1==variable) # Extract from the metadata file the analysis to be done. 
+  names(sink_and_source)=sink_and_source[1,] # Set first row as header
+  sink_and_source=sink_and_source[-1,-1] # Delete first row and column
+  # The metadata is now ready to be used with FEAST
+  # Extract samples included in the metadata from the count matrix 
+  rownames(sink_and_source) <- sink_and_source[,1] # set the first column containing the sample ID as row names 
+  common.sample.ids <- intersect(rownames(t(raw_asv)), rownames(sink_and_source)) # Identify common samples between ASV and metadata
+  asv <- t(raw_asv)[common.sample.ids,] # Extract from the asv table only the samples listed in common.sample.ids
+  # The ASV and metadata tables are now ready for FEAST 
+  FEAST_output = FEAST(C = asv, metadata = sink_and_source, different_sources_flag = 0, dir_path="~/sequences/Arc/Feast_result", outfile=variable)
+} 
+
+```
+
+### Bar plot
+# Change path for the directory where the output from FEAST were saved
+```{r}
+dir="~/sequences/Arc/Feast_result" # set path to where the output from FEAST were saved 
+file_names <- list.files(dir, full.names = T) # list the names of all the files in that directory 
+
+df=data.frame() # generate empty data frame 
+
+for (out_feast in unique(file_names)){
+  out_df=read.csv(out_feast,sep="\t") # read csv 
+  out_df <- out_df %>% tibble::rownames_to_column(var="Sink") # Set row name as first column values
+  df_melt=melt(out_df, id=c("Sink")) # Melt to long format
+  df=rbind(df,df_melt) # Populate empty data frame 
+} 
+
+df=na.omit(df) # remove rows with NA 
+
+df$Bioreactor <- ifelse(grepl("^F-B-", df$Sink), "Bioreactor 1",
+                 ifelse(grepl("^F-J-", df$Sink), "Bioreactor 2",
+                 ifelse(grepl("^F-R-", df$Sink), "Bioreactor 3",
+                 ifelse(grepl("^R-B",  df$Sink), "Bioreactor 1", 
+                 ifelse(grepl("^R-J",  df$Sink), "Bioreactor 2",
+                 ifelse(grepl("^R-R",  df$Sink), "Bioreactor 3","Field"))))))
+
+df <- separate(df, Sink, into = c("Name", "Sample"), sep = "_", remove = FALSE)
+
+
+df$Sink <- gsub("F-", "", df$Sink)
+df$Sink <- gsub("R-B", "B", df$Sink)
+df$Sink <- gsub("R-R", "R", df$Sink)
+
+
+df$Sink <- gsub("-J", "-D", df$Sink)
+
+
+# Extract numbers in the format "X-D2_water" and multiply by 2 (where X can be any letter)
+df <- df %>%
+  mutate(Sink = str_replace_all(Sink, "([BJR])-D(\\d+)_water", function(match) {
+    number <- as.numeric(sub("([BJR])-D(\\d+)_water", "\\2", match))
+    if (!is.na(number)) {
+      paste0(sub("([BJR])-D(\\d+)_water", "\\1-D", match), 2 * number, "_water")
+    } else {
+      match
+    }
+  }))
+
+
+df$variable <- gsub("F.", "", df$variable)
+df$variable <- gsub("R.B", "B", df$variable)
+df$variable <- gsub("R.R", "R", df$variable)
+df$variable <- gsub(".J", "-D", df$variable)
+
+df <- df %>%
+  mutate(variable = str_replace_all(variable, "([BJR])-D(\\d+)_water", function(match) {
+    number <- as.numeric(sub("([BJR])-D(\\d+)_water", "\\2", match))
+    if (!is.na(number)) {
+      paste0(sub("([BJR])-D(\\d+)_water", "\\1-D", match), 2 * number, "_water")
+    } else {
+      match
+    }
+  }))
+
+
+```
+
+
+```{r}
+df$Sink <- factor(df$Sink, c( 
+            "B-D2_water","B-D6_water","B-D8_water","B-D14_water","B-D18_water",
+            "J-D4_water","J-D8_water","J-D10_water","J-D12_water","J-D14_water","J-D18_water",
+            "R-D4_water","R-D6_water","R-D8_water","R-D10_water","R-D14_water","R-D16_water","R-D18_water","R-D20_water"))
+
+df$variable <- factor(df$variable, c("P1_well", "P2_well","P3_well","P4_well", "Unknown",
+            "B-D2_water","B-D6_water","B-D8_water","B-D14_water","B-D18_water",
+            "J-D4_water","J-D8_water","J-D10_water","J-D12_water","J-D14_water","J-D18_water",
+            "R-D4_water","R-D6_water","R-D8_water","R-D10_water","R-D14_water","R-D16_water","R-D18_water","R-D20_water"))
+
+palette <- c("#6a040f","#DA4749","#FFA07B","#F24D3C","#0a0908","#F66308","#ff9a00","#ffc300","#F9D984",
+             "#ADC178","#6a994e","#17633F","#88d4ab","#568259",
+             "#BFD7EA","#3D405B","#FFE5FF","#AF75A0","#89023E","#ffadc7")
+
+# Generate plot 
+Feast = ggplot(df, aes(x = Sink, fill=variable, y=value)) + 
+        geom_bar(stat="identity") +
+        theme(text = element_text(size = 20), 
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+        scale_fill_manual(values=c(palette))+
+        guides(fill=guide_legend(title="Sources", nrow= 21)) +
+        facet_grid(cols = vars(df$Bioreactor), scales="free", margins = FALSE, drop = F)
+
+Feast
+
+ggsave("/home/dpatel/sequences/Arc/arc_Figures/Arc_Feast2.jpeg", width = 20, height = 12, plot = last_plot())
+```
