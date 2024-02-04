@@ -4,9 +4,7 @@ author: "Divya"
 date: "2022-11-03"
 output: html_document
 ---
-## On va commencer par tout supprimer de notre data avec rm()
-
-couper rarefaction à 1000
+## We'll start off by removing all the data we might have loaded before
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(message = FALSE, include = FALSE)
@@ -14,25 +12,20 @@ knitr::opts_chunk$set(message = FALSE, include = FALSE)
 rm(list=ls())
 ```
 
-## Opening DADA2 and setting our working directory for our Bacteria files
+## Opening DADA2 and setting our working directory for our Eukaryote (Euc) files
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
-
 library(dada2); packageVersion("dada2")
-
 
 #Setting a path to the FASTQ files
 #Here I'm focusing on my Eukaryotes
-
 path <-"~/sequences/Euc/euc_fastq"
 
 
 #Just going to make sure the path is leading to the .fastq files
-
 list.files(path)
 
 #Alrigth, looks like it worked! ^.^
-
 ```
 
 ## Seperate the Forward and Reverse fastq files
@@ -40,10 +33,8 @@ list.files(path)
 ```{r pressure, include=FALSE}
 # Identify forward and reverse reads
 # Filenames containing R1 are forward reads, R2 are reverse reads.
-
 fnFs <- sort(list.files(path, pattern="R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path, pattern="R2_001.fastq", full.names = TRUE))
-
 ```
 
 ## Assign the filenames for the filtered fastq.gz files and place in filtered subdirectory 
@@ -52,19 +43,15 @@ sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
 
 # We'll still have the "-bac" at the end of the file names. 
 #To remove that, we'll use gsub()
-
 sample.names <- gsub("-euc", "", sample.names)
 
 # Let's make sure the previous functions worked
-
 sample.names
 
 #Ok we did it. Now, let's put the files in a subdirectory
-
 filt_path <- file.path(getwd(), "~/sequences/Euc")
 filtFs <- file.path("~/sequences/Euc/filtered", paste0(sample.names, "_F_filt.fastq.gz"))
 filtRs <- file.path("~/sequences/Euc/filtered", paste0(sample.names, "_R_filt.fastq.gz"))
-
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 ``` 
@@ -74,30 +61,24 @@ names(filtRs) <- sample.names
 
 ```{r}
 #First, we can look at some of the Forwards sequences for Filter samples
-
 plotQualityProfile(fnFs[9:18])
 
 #Save as a PDF file
-
 ggsave("sequences/Euc/euc_Figures/Euc_qualityplot_Filtre_Forward.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
 
 #Then, some of the Forwards sequences for Rock samples 
-
 plotQualityProfile(fnFs[40:50])
 ggsave("sequences/Euc/euc_Figures/Euc_qualityplot_Roche_Forward.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
 
 
 #Now we can look at some of the Reverse sequences for Filter samples
-
 plotQualityProfile(fnRs[9:18])
 ggsave("sequences/Euc/euc_Figures/Euc_qualityplot_Filtre_Reverse.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
 
 
 #And finally, some of the Reverse sequences for Rock samples
-
 plotQualityProfile(fnRs[40:50])
 ggsave("sequences/Euc/euc_Figures/Euc_qualityplot_Roche_Reverse.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
-
 
 ```
 
@@ -108,30 +89,24 @@ ggsave("sequences/Euc/euc_Figures/Euc_qualityplot_Roche_Reverse.pdf", height = 8
 ## For the reverse, we'll remove the first 21 nucleotides (size of the primer).
 ## We'll trim the last nucleotides at position 270 (trimming the last 70 nucleotides) to avoid errors
 ```{r}
-
 out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(270,200),
                      maxN=0, maxEE=c(5,5), truncQ=2, trimLeft=c(17,21),
                      compress=TRUE, multithread=TRUE) 
 out
-
 ```
 
 ## Let's now look at the error rate
 
 ```{r}
-
 errF <- learnErrors(filtFs, multithread=TRUE, randomize=TRUE)
-#101159773 total bases in 399841 reads from 36 samples will be used for learning the error rates.
-
+###101159773 total bases in 399841 reads from 36 samples will be used for learning the error rates.
 
 errR <- learnErrors(filtRs, multithread=TRUE, randomize=TRUE)
-#100791141 total bases in 563079 reads from 42 samples will be used for learning the error rates.
+###100791141 total bases in 563079 reads from 42 samples will be used for learning the error rates.
 
 #Plot the error rates
-
 plotErrors(errF, nominalQ=TRUE)
 dev.print(width = 20, height = 10, pdf,"/home/dpatel/sequences/Euc/euc_Figures/plotErrors.pdf")
-
 ```
 
 ## Time to dereplicate: removing replicate of identical sequences from each sample
@@ -140,9 +115,7 @@ dev.print(width = 20, height = 10, pdf,"/home/dpatel/sequences/Euc/euc_Figures/p
 derepFs <- derepFastq(filtFs, verbose=TRUE)
 derepRs <- derepFastq(filtRs, verbose=TRUE)
 
-
 # Name the derep-class objects by the sample names
-
 names(derepFs) <- sample.names
 names(derepRs) <- sample.names
 
@@ -153,8 +126,8 @@ dadaRs <- dada(filtRs, err=errR, pool="pseudo", multithread=TRUE)
 # Inspect the returned dada-class object:
 dadaFs[[7]]
 
-# Result = dada-class: object describing DADA2 denoising results
-# 6 sequence variants were inferred from 419 input unique sequences.
+### Result = dada-class: object describing DADA2 denoising results
+### 6 sequence variants were inferred from 419 input unique sequences.
 
 ```
 
@@ -164,44 +137,34 @@ dadaFs[[7]]
 ```{r}
 
 # First, we merge the paired reads
-
 mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs)
 
 # Before continuing, let's look at the data.frame (first sample only)
-
 head(mergers[[1]])
 
 # Construct an amplicon sequence variant table (ASV) table and check the dimension of it
-
 seqtab <- makeSequenceTable(mergers)
 dim(seqtab)
-
-#[1]    62 868
+###[1]    62 868
 
 # Inspect distribution of sequence lengths
-
 table(nchar(getSequences(seqtab)))
-#The majority of the sequences are 253 nucleotides
+###The majority of the sequences are 253 nucleotides
 
 
 # Remove chimeras 
-
 seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE)
 
-
 #View dimension of your matrices 
-
 dim(seqtab.nochim)
 sum(seqtab.nochim)/sum(seqtab)
-
-#[1]   62 574
-#[1] 0.895732
+###[1]   62 574
+###[1] 0.895732
 ``` 
 
 ## Track reads through the pipeline
 ```{r}
 # Obtain the count of how many sequences were deleted at each steps. 
-
 getN <- function(x) sum(getUniques(x))
 track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
 colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
@@ -212,22 +175,16 @@ track
 ## Time to asing taxonomy to our ASVs
 
 ```{r}
-
 # Identifying the taxonomy
-
 taxa <- assignTaxonomy(seqtab.nochim, "~/silva_132.18s.99_rep_set.dada2.fa.gz?download=1", multithread=TRUE, tryRC=TRUE)
-
-#taxa.sp <- addSpecies(taxa,  "~/silva_species_assignment_v138.1.fa.gz?download=1", allowMultiple = TRUE, tryRC = TRUE)
+taxa.sp <- addSpecies(taxa,  "~/silva_species_assignment_v138.1.fa.gz?download=1", allowMultiple = TRUE, tryRC = TRUE)
 
 # Removing sequence rownames for display only
-
 taxa.print <- taxa 
 rownames(taxa.print) <- NULL
 head(taxa.print, n=20)
 
 View(taxa)
-
-
 ```
 
 
@@ -236,19 +193,15 @@ View(taxa)
 ```{r}
 
 # For the taxonomy table
-
 write.csv(as.data.frame(taxa.print), file = file.path("~/sequences/Euc/euc_csv/EUC_S1_taxonomy_table.csv")) 
 
 # For the ASV table
-
 write.csv(as.data.frame(seqtab.nochim),file = file.path("~/sequences/Euc/euc_csv/ASV_euc1_table.csv")) 
 write.csv(as.data.frame(t(seqtab.nochim)),file = file.path("~/sequences/Euc/euc_csv/ASV_E1_t_table.csv"))
 
 #Save sequence table and taxonomic annotations to individual files
-
 saveRDS(seqtab.nochim, file = file.path("~/sequences/euc1_seqtab_nochim.rds"))
 saveRDS(taxa, file = file.path("~/sequences/euc1_taxa_sp.rds"))
-
 ```
 
 
@@ -256,7 +209,6 @@ saveRDS(taxa, file = file.path("~/sequences/euc1_taxa_sp.rds"))
 
 ```{r}
 # Let's open all the data we'll need  
-
 library(picante)
 library(vegan)
 library(ggplot2)
@@ -265,35 +217,26 @@ library(ggpubr)
 library(DESeq2)
 library(pheatmap)
 library(phyloseq)
-
 ```
 
 ## Let's also get our DADA2 results
 
 ```{r}
 # load sequence table (nonchimeric ASV abundances in samples)
-
 seqtab.nochim <- readRDS("/home/dpatel/sequences/Euc/euc1_seqtab_nochim.rds")
 
-
 # load taxonomic annotations (taxonomic ID of each ASV)
-
 taxa.sp <- readRDS("/home/dpatel/sequences/Euc/euc1_taxa_sp.rds")
-
 ```
 
 ## Let's create a community and taxonomy object
 
 ```{r}
 # community object from nonchimeric ASV sequence table
-
 comm <- seqtab.nochim
 
-
 # taxonomy object - make sure order of ASVs match between community and taxonomy
-
 taxo <- taxa.sp[colnames(comm),]
-
 ```
 
 
@@ -301,9 +244,8 @@ taxo <- taxa.sp[colnames(comm),]
 ## Doing some cleaning
 
 ```{r}
-# First, let's make sure we only have bacteria phylums in our taxonomy
+# First, let's make sure we only have Eukaryote phylums in our taxonomy
 table(taxo[,"Kingdom"])
-
 
 #Let's also put our taxo as a data frame to be able to use phyloseq.
 #We can also use this opportunity to put "NAs".
@@ -317,7 +259,6 @@ taxid <- t(taxid)
 taxid[ taxid == "unclassified_NA" ] <- NA
 
 # Remove unclassified ASV from the taxonomy matrix then from the ASV matrix
-
 taxid <-subset(as.data.frame(taxid), Kingdom =="Eukaryota")
 comm <- seqtab.nochim[,colnames(comm) %in% rownames(taxid)]
 
@@ -332,7 +273,6 @@ comm <- seqtab.nochim[,colnames(comm) %in% rownames(taxid)]
 rowSums(comm)
 
 # visualize log10 number of reads per sample
-
 hist(log10(rowSums(comm)))
 #We have a lot of reads in some samples and very few reads in other (most likely the control samples)
 
@@ -340,7 +280,6 @@ hist(log10(rowSums(comm)))
 hist(log10(colSums(comm)))
 
 # Looks like we're going to have a couple of dominant ASVs in our samples
-
 ```
 
 
@@ -352,18 +291,13 @@ comm.pca <- prcomp(decostand(comm,"hellinger"))
 
 # plot ordination results
 ordiplot(comm.pca, display="sites", type="text",cex=1.0)
-
-# Our samples (except the F-R-J1) are all seperate from our Controls (CRTL) and negatives. Some of the CRTL are pretty close to the Tourb
-
+### Our samples (except the F-R-J1) are all seperate from our Controls (CRTL) and negatives. Some of the CRTL are pretty close to the Tourb
 
 # Surface plot - plot number of sequences/sample (library size)
-
 ordisurf(comm.pca, rowSums(comm), bubble=TRUE, cex=2,
          main="Library size (sequences/sample)")
 dev.print(width = 10, height = 8, pdf,"/home/dpatel/sequences/Euc/euc_Figures/seq_per_sample.pdf")
-
-# Most samples are between 12 000 and 16 000 sequences. There are a couples of samples at around 0 sequence. 
-
+### Most samples are between 12 000 and 16 000 sequences. There are a couples of samples at around 0 sequence. 
 ```
 
 
@@ -371,7 +305,6 @@ dev.print(width = 10, height = 8, pdf,"/home/dpatel/sequences/Euc/euc_Figures/se
 
 ```{r}
 # Abundance of ASVs in negative controls
-
 comm['BlancKit',][comm['BlancKit',]>0]
 comm['CRTL-B4B',][comm['CRTL-B4B',]>0]
 comm['CRTL-B5H',][comm['CRTL-B5H',]>0]
@@ -379,8 +312,6 @@ comm['CRTL-J1B',][comm['CRTL-J1B',]>0]
 comm['CRTL-J2M',][comm['CRTL-J2M',]>0]
 comm['CRTL-R3H',][comm['CRTL-R3H',]>0]
 comm['CRTL-R6M',][comm['CRTL-R6M',]>0]
-
-
 ```
 
 
@@ -398,9 +329,7 @@ metadata <- read.csv("/home/dpatel/metadata_Bioreacteur1.csv", header=TRUE, sep=
 head(metadata)
 
 #Phyloseq 
-
 ps <- phyloseq(otu_table(t(comm), taxa_are_rows=TRUE), tax_table(as.matrix(taxid)), sample_data(metadata))
-
 
 # Add sequence table 
 dna <- Biostrings::DNAStringSet(taxa_names(ps))
@@ -409,13 +338,11 @@ ps <- merge_phyloseq(ps, dna)
 
 # Make ASV ID shorter 
 taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
-
 ```
 
 ## Remove the negative controls (decontam)
 
 ```{r}
-
 sample_data(ps)$is.neg <- sample_data(ps)$SampleType == "Controle"
 contamdf.prev <- isContaminant(ps, method="prevalence", neg="is.neg", threshold=0.5)
 table(contamdf.prev$contaminant)
@@ -423,11 +350,9 @@ ps.noncontam <- prune_taxa(!contamdf.prev$contaminant, ps)
 final.ps=subset_samples(ps.noncontam, !SampleType=="Controle")
 
 #Save the ASVs, taxa and metadata
-
 write.csv(as.data.frame(as(tax_table(final.ps), "matrix")), file = "/home/dpatel/sequences/Euc/euc_csv/noncontam_taxa.csv") 
 write.csv(as.data.frame(as(otu_table(final.ps), "matrix")),file = "/home/dpatel/sequences/Euc/euc_csv/noncontam_asv.csv")
 write.csv(as.data.frame(as(sample_data(final.ps), "matrix")), file="/home/dpatel/sequences/Euc/euc_csv/noncontam_meta.csv")
-
 ```
 
 
@@ -435,15 +360,12 @@ write.csv(as.data.frame(as(sample_data(final.ps), "matrix")), file="/home/dpatel
 ## Visualize the new community composition
 
 ```{r}
-
 # Load our "noncontam" files
-
 noncontam_taxa <- read.csv("/home/dpatel/sequences/Euc/euc_csv/noncontam_taxa.csv", header = TRUE, sep =",", row.names = 1)
 noncontam_asv <- read.csv("/home/dpatel/sequences/Euc/euc_csv/noncontam_asv.csv", header = TRUE, sep =",", row.names = 1)
 noncontam_meta <- read.csv("/home/dpatel/sequences/Euc/euc_csv/noncontam_meta.csv", header=TRUE, sep=",", row.names = 1)
 
 # Puttingg our ASVs and taxonomy into another object 
-
 noncontam_comm <- t(as.data.frame(noncontam_asv))
 noncontam_taxo <- as.data.frame(noncontam_taxa)[colnames(noncontam_comm),]
 
@@ -451,8 +373,7 @@ noncontam_taxo <- as.data.frame(noncontam_taxa)[colnames(noncontam_comm),]
 noncontam.pca <- prcomp(decostand(noncontam_comm,"hellinger"))
 ordiplot(noncontam.pca, display="sites", type="text",cex=1.0)
 dev.print(width = 10, height = 8, pdf,"/home/dpatel/sequences/Euc/euc_Figures/PCA.pdf")
-# Our samples are all pretty close from each other
-
+### Our samples are all pretty close from each other
 
 ```
 
@@ -461,20 +382,16 @@ dev.print(width = 10, height = 8, pdf,"/home/dpatel/sequences/Euc/euc_Figures/PC
 ## Making rarefaction curves 
 
 ```{r}
-
 # What is the smallest number of sequences/sample for subset of samples?
-
 min(rowSums(noncontam_comm))
 rowSums(noncontam_comm)
 
 # Rarefaction curve for subset of samples + saving them
-
 rarecurve(noncontam_comm, step=200, label=TRUE)
 dev.print(width = 24, height = 10, pdf,"/home/dpatel/sequences/Euc/euc_Figures/rarefaction_curve_all.pdf")
 
 rarecurve(noncontam_comm, step=200, label=TRUE, xlim=c(0,5000))
 dev.print(width = 24, height = 10, pdf,"/home/dpatel/sequences/Euc/euc_Figures/rarefaction_curve_short.pdf")
-
 
 minTotRelAbun = 5e-5
 x = taxa_sums(final.ps)
@@ -490,261 +407,6 @@ ps_raref <-rarefy_even_depth(prunedSet, 3000, rngseed=112)
 write.csv(as.data.frame(as(tax_table(ps_raref), "matrix")), file = "/home/dpatel/sequences/Euc/euc_csv/rarefied_taxa.csv") 
 write.csv(as.data.frame(as(otu_table(ps_raref), "matrix")),file = "/home/dpatel/sequences/Euc/euc_csv/rarefied_asv.csv")
 write.csv(as.data.frame(as(sample_data(ps_raref), "matrix")), file="/home/dpatel/sequences/Euc/euc_csv/rarefied_meta.csv") 
-
-```
-
-
-## Preparing for the plots (BONNE)
-
-```{r}
-#install.packages("randomcoloR")
-library(plyr)
-library(dplyr)
-library(phyloseq)
-library(randomcoloR)
-
-
-asv=read.table("/home/dpatel/sequences/Euc/euc_csv/rarefied_asv.csv", sep=",", row.names=1, header=TRUE, check.names=FALSE) 
-taxa=read.table("/home/dpatel/sequences/Euc/euc_csv/rarefied_taxa.csv", sep=",", row.names=1, header=TRUE) 
-meta=read.table("/home/dpatel/sequences/Euc/euc_csv/rarefied_meta.csv", sep=",", row.names=1, header=TRUE) 
-
-# Merge into phyloseq object 
-ps=phyloseq(otu_table(asv, taxa_are_rows=TRUE), tax_table(as.matrix(taxa)), sample_data(meta))
-
-# Select taxonomic rank
-taxa_rank <- readline(prompt="Which taxnomic rank do you want to plot, Genus (G) or Class (C) ? ")
-if (taxa_rank == "G"){
-  taxa_rank="Genus"
-} else if (taxa_rank == "C"){
-  taxa_rank="Class"
-}else {
-  print("wake up brain")
-}
-
-# Transform counts to relative abundance and agglomerate to the desired taxonomic rank. Melt phyloseq object to dataframe. 
-
-ps_rel_abund=transform_sample_counts(ps, function(x) x/sum(x)) # get abundance in %
-glom=tax_glom(ps_rel_abund, taxrank = taxa_rank) # agglomerate taxa at the desired taxonomic level
-df=psmelt(glom) # create dataframe from phyloseq object
-
-medians=ddply(df, taxa_rank, function(x) c(median=median(x$Abundance)))
-remainder <- medians[medians$median <= 0.001,][[1]] # Find taxons whose rel. abund. is less than 0.1%
-df[df[[taxa_rank]] %in% remainder,][[taxa_rank]]="Other (abundance < 0.1%)" # Change their name to "Other (abondance < 0.1%)"
-
-# Create empty list 
-list_of_all_taxonomic_rank= list()
-
-```
-
-
-
-### Making the plots
-```{r}
-
-# Plot with Class: You have to type "C" at the "Select taxonomic rank" part
-
-# We'll start with the Class for our Filtre samples
-
-Class_Filters <- df[(df$SampleType == "Filtre"), ]
-Class_Filters$Sample <- gsub("F-", "", Class_Filters$Sample)
-
-Class_Filters$Sample <- factor(Class_Filters$Sample, c("P1","P2","P3","P4","Tourb",
-                              "B-J1","B-J3","B-J5","B-J7","B-J9",
-                              "J-J1","J-J2","J-J3","J-J5","J-J6","J-J7","J-J8","J-J9","J-J11",
-                              "R-J2","R-J3","R-J5","R-J6","R-J7","R-J8","R-J9","R-J10")) 
-
-BAC_Class=ggplot(Class_Filters, aes(x=Sample, weight=Abundance, fill=.data[[taxa_rank]])) +
-  geom_bar() +
-  labs(y ='Relative abundance (%)', paste(sample), x = "Filter") +
-  scale_y_continuous(expand = c(0,0)) +
-  theme(text = element_text(size = 20),axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  my_scale + 
-  facet_grid(scales="free", margins = FALSE, drop = F) +
-  ggtitle(" ")
-  
-BAC_Class
-ggsave("sequences/Euc/euc_Figures/Euc_Filtre_Class.pdf", width = 24, height = 12, plot = last_plot())
-
-
-# Plot with Class (Rocks)
-
-Class_Rocks <- df[(df$SampleType == "Roche"),] 
-Class_Rocks$Sample <- gsub("R-", "", Class_Rocks$Sample)
-
-Class_Rocks$Sample <- factor(Class_Rocks$Sample, c("B1B","B5B","B7B","B8B","B3M","B4M","B1H","B6H","B7H",
-                                                   "J1B","J3B","J7B","J8B","J2H","R5B","R7B","R2M","R3M","R7M","R1H"))
-
-BAC_Class_R=ggplot(Class_Rocks, aes(x=Sample, weight=Abundance, fill=.data[[taxa_rank]])) +
-  geom_bar() +
-  labs(y ='Relative abundance (%)', paste(sample), x = "Rock") +
-  scale_y_continuous(expand = c(0,0)) +
-  theme(text = element_text(size = 20),axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  my_scale + 
-  facet_grid(cols = vars(Class_Rocks$Bioreacteur), scales="free", margins = FALSE, drop = F) +
-  ggtitle(" ")
-  
-BAC_Class_R
-ggsave("sequences/Euc/euc_Figures/Euc_Roche_Class.pdf", width = 24, height = 12, plot = last_plot())
-
-
-
-```
-
-
-
-### Making the Genus plots
-```{r}
-
-# Merge into phyloseq object 
-ps=phyloseq(otu_table(asv, taxa_are_rows=TRUE), tax_table(as.matrix(taxa)), sample_data(meta))
-
-# Select taxonomic rank
-taxa_rank <- readline(prompt="Which taxnomic rank do you want to plot, Genus (G) or Class (C) ? ")
-if (taxa_rank == "G"){
-  taxa_rank="Genus"
-} else if (taxa_rank == "C"){
-  taxa_rank="Class"
-}else {
-  print("wake up brain")
-}
-
-# Transform counts to relative abundance and agglomerate to the desired taxonomic rank. Melt phyloseq object to dataframe. 
-
-ps_rel_abund=transform_sample_counts(ps, function(x) x/sum(x)) # get abundance in %
-glom=tax_glom(ps_rel_abund, taxrank = taxa_rank) # agglomerate taxa at the desired taxonomic level
-df=psmelt(glom) # create dataframe from phyloseq object
-
-medians=ddply(df, taxa_rank, function(x) c(median=median(x$Abundance)))
-remainder <- medians[medians$median <= 0.001,][[1]] # Find taxons whose rel. abund. is less than 0.1%
-df[df[[taxa_rank]] %in% remainder,][[taxa_rank]]="Other (abundance < 0.1%)" # Change their name to "Other (abondance < 0.1%)"
-
-
-# Create empty list 
-list_of_all_taxonomic_rank= list()
-
-# Loop over every sample_type to combine taxons with a relative abundance < 0.1% 
-data <- data.frame()
- 
-
-for (sample in unique(df$Sample)){
-    table=subset(df, Sample==sample)
-    medians=ddply(table, taxa_rank, function(x) c(median=median(x$Abundance)))
-    remainder <- medians[medians$median <= 0.001,][[1]] # Find taxons whose rel. abund. is less than 0.1%
-    table[table[[taxa_rank]] %in% remainder,][[taxa_rank]]="Other (abundance < 0.1%)" # Change their name to "Other (abondance < 0.1%)"
-    list_of_all_taxonomic_rank <- append(list_of_all_taxonomic_rank,table[[taxa_rank]])
-data = rbind(df,table)
-
-    
-taxon_list=as.data.frame(list_of_all_taxonomic_rank)
-df_taxon_list=as.data.frame(t(taxon_list))
-unique_taxonomic_ranks=as.data.frame(unique(df_taxon_list$V1))
-names(unique_taxonomic_ranks)[names(unique_taxonomic_ranks)=="unique(df_taxon_list$V1)"]=as.character(taxa_rank) # Rename column 
-
-}
-
-
-# Plot with Genus: You have to type "G" at the "Select taxonomic rank" part
-
-# We'll start with our Filtre samples
-
-Genus_Filters <- df[(df$SampleType == "Filtre"), ]
-Genus_Filters$Sample <- gsub("F-", "", Genus_Filters$Sample)
-
-Genus_Filters$Sample <- factor(Genus_Filters$Sample, c("P1","P2","P3","P4","Tourb",
-                              "B-J1","B-J3","B-J5","B-J7","B-J9",
-                              "J-J1","J-J2","J-J3","J-J5","J-J6","J-J7","J-J8","J-J9","J-J11",
-                              "R-J2","R-J3","R-J5","R-J6","R-J7","R-J8","R-J9","R-J10")) 
-
-EUC_Genus=ggplot(Genus_Filters, aes(x=Sample, weight=Abundance, fill=.data[[taxa_rank]])) +
-  geom_bar() +
-  labs(y ='Relative abundance (%)', paste(sample), x = "Filter") +
-  scale_y_continuous(expand = c(0,0)) +
-  theme(text = element_text(size = 20),axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  my_scale + facet_grid( scales="free", margins = FALSE, drop = FALSE) +
-  ggtitle(" ")
-  
-EUC_Genus
-ggsave("sequences/Euc/euc_Figures/Euc_Filtre_Genus.pdf", width = 24, height = 12, plot = last_plot())
-
-
-# Plot with Genus (Rocks)
-
-Genus_Rocks <- df[(df$SampleType == "Roche"),] 
-Genus_Rocks$Sample <- gsub("R-", "", Genus_Rocks$Sample)
-
-Genus_Rocks$Sample <- factor(Genus_Rocks$Sample, c("B1B","B5B","B7B","B8B","B3M","B4M","B1H","B6H","B7H",
-                                                   "J1B","J3B","J7B","J8B","J2H","R5B","R7B","R2M","R3M","R7M","R1H"))
-
-EUC_Genus_R=ggplot(Genus_Rocks, aes(x=Sample, weight=Abundance, fill=.data[[taxa_rank]])) +
-  geom_bar() +
-  labs(y ='Relative abundance (%)', paste(sample), x = "Rock") +
-  scale_y_continuous(expand = c(0,0)) +
-  theme(text = element_text(size = 20),axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  my_scale + 
-  facet_grid(cols = vars(Genus_Rocks$Bioreacteur), scales="free", margins = FALSE, drop = F) +
-  ggtitle(" ")
-  
-EUC_Genus_R
-ggsave("sequences/Euc/euc_Figures/Euc_Roche_Genus.pdf", width = 24, height = 12, plot = last_plot())
-
-
-
-```
-
-
-## SET COLORS
-```{r}
-# Assign colors to every unique taxonomic_ranks 
-
-#my_scale <- scale_fill_manual(name=as.character(taxonomic_rank), values = palette, na.translate=FALSE, drop=TRUE, limits = force) # Recreate color fill 
-
-
-# To create a new color range
-n <- nrow(unique_taxonomic_ranks) + 20
-palette <- distinctColorPalette(n)
-unique_taxonomic_ranks[[taxa_rank]]=factor(unique_taxonomic_ranks[[taxa_rank]]) 
-names(palette) <- levels(unique_taxonomic_ranks[[taxa_rank]]) 
-my_scale <- scale_fill_manual(name=as.character(taxa_rank), values = palette, na.translate=FALSE, drop=TRUE, limits = force)
-
-# Saving the color palette for future use 
-#saveRDS(palette, "/home/dpatel/sequences/Arc/colors_class.rds")
-
-```
-
-
-
-
-
-# Let's just see the effect of the rarefaction.
-
-```{r}
-
-set.seed(0)
-
-# Randomly rarefy samples
-
-comm_rarfy <- rrarefy(noncontam_comm, sample = min(rowSums(noncontam_comm)))
-
-# Remove any ASVs whose abundance is 0 after rarefaction
-
-comm_rarfy <- comm_rarfy[,colSums(comm_rarfy)>1]
-
-# Match ASV taxonomy to rarefied community
-
-taxo_rarfy <- taxid[colnames(comm_rarfy),]
-
-
-# Rarefaction is not expected to have a major influence on the diversity (as rarefaction curves have reached the plateau).
-
-richness_raw <- rowSums((noncontam_comm>0)*1)
-
-richness_rarfy <- rowSums((comm_rarfy>0)*1)
-
-plot(richness_rarfy~richness_raw,xlab='number of ASVs in raw data',ylab='number of ASVs in rarefied data')
-reg <- lm(richness_rarfy~richness_raw)
-abline(reg, col = "red")
-
-
 ```
 
 
