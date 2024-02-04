@@ -5,32 +5,26 @@ date: "2022-11-03"
 output: html_document
 ---
 
-## On va commencer par tout supprimer de notre data avec rm()
+## We'll start by removing any data we would have with rm()
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(message = FALSE, include = FALSE)
-
 rm(list=ls())
 ```
 
-## Opening DADA2 and setting our working directory for our Bacteria files
+## Opening DADA2 and setting our working directory for our Archaea (Arc) files
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
-
 library(dada2); packageVersion("dada2")
 
-
 #Setting a path to the FASTQ files
-#Here I'm focusing on my Bacterias
-
+#Here I'm focusing on my Archaea
 path <-"~/sequences/Arc/arc_fastq"
 
 #Just going to make sure the path is leading to the .fastq files
-
 list.files(path)
 
 #Alrigth, looks like it worked! ^.^
-
 ```
 
 ## Seperate the Forward and Reverse fastq files
@@ -38,7 +32,6 @@ list.files(path)
 ```{r pressure, include=FALSE}
 # Identify forward and reverse reads
 # Filenames containing R1 are forward reads, R2 are reverse reads.
-
 fnFs <- sort(list.files(path, pattern="R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path, pattern="R2_001.fastq", full.names = TRUE))
 
@@ -50,19 +43,15 @@ sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
 
 # We'll still have the "-bac" at the end of the file names. 
 #To remove that, we'll use gsub()
-
 sample.names <- gsub("-arc", "", sample.names)
 
 # Let's make sure the previous functions worked
-
 sample.names
 
 #Ok we did it. Now, let's put the files in a subdirectory
 
 filtFs <- file.path("~/sequences/Arc/filtered", paste0(sample.names, "_F_filt.fastq.gz"))
-
 filtRs <- file.path("~/sequences/Arc/filtered", paste0(sample.names, "_R_filt.fastq.gz"))
-
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 ``` 
@@ -72,22 +61,16 @@ names(filtRs) <- sample.names
 
 ```{r}
 #First, we can look at some of the Forwards sequences for Filter samples
-
 plotQualityProfile(fnFs[5:20])
 
 #Save as a PDF file
-
 ggsave("sequences/Arc/arc_Figures/Arc_qualityplot_Forward.pdf", plot = last_plot())  
 
 #Then, some of the Forwards sequences for the Well samples
-
 plotQualityProfile(fnFs[22:26])
 
 #Save as a PDF file
-
 ggsave("sequences/Arc/arc_Figures/Arc_qualityplot_Reverse.pdf", plot = last_plot())
-
-
 ```
 
 
@@ -101,17 +84,14 @@ ggsave("sequences/Arc/arc_Figures/Arc_qualityplot_Reverse.pdf", plot = last_plot
 out <- filterAndTrim(fnFs, filtFs, truncLen=c(230),
                     maxN=0, maxEE=2 , truncQ=2, trimLeft=10,
                     compress=TRUE, multithread=FALSE)
-
 out
-
 ```
 
 ## Let's now look at the error rate
 
 ```{r}
-
 errF <- learnErrors(filtFs, multithread=TRUE, randomize=TRUE)
-#100100660 total bases in 455003 reads from 23 samples will be used for learning the error rates.
+###100100660 total bases in 455003 reads from 23 samples will be used for learning the error rates.
 
 plotErrors(errF, nominalQ=TRUE)
 ```
@@ -119,55 +99,45 @@ plotErrors(errF, nominalQ=TRUE)
 ## Time to dereplicate: removing replicate of identical sequences from each sample
 
 ```{r}
-
 # Apply the core sample inference algorithm to the filtered and trimmed sequence data
 dadaFs <- dada(filtFs, err=errF, pool="pseudo", multithread=TRUE) 
-
 
 # Inspect the returned dada-class object:
 dadaFs[[7]]
 
-# Result = dada-class: object describing DADA2 denoising results
-# 337 sequence variants were inferred from 4151 input unique sequences.
-
+### Result = dada-class: object describing DADA2 denoising results
+### 337 sequence variants were inferred from 4151 input unique sequences.
 ```
 
 
 ## We're going to create the ASVs 
 ```{r}
 
-
 # Construct an amplicon sequence variant table (ASV) table and check the dimension of it
-
 seqtab <- makeSequenceTable(dadaFs)
 dim(seqtab)
 
-#[1]    26 2471
+###[1]    26 2471
 
 # Inspect distribution of sequence lengths
-
 table(nchar(getSequences(seqtab)))
 #All of the sequences are 220 nucleotides long
 
-
 # Remove chimeras 
-
 seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
-
 
 #View dimension of your matrices 
 
 dim(seqtab.nochim)
 sum(seqtab.nochim)/sum(seqtab)
 
-#[1]   26 2111
-#[1]   0.9529474
+###[1]   26 2111
+###[1]   0.9529474
 ``` 
 
 ## Track reads through the pipeline
 ```{r}
 # Obtain the count of how many sequences were deleted at each steps. 
-
 getN <- function(x) sum(getUniques(x))
 track <- cbind(out, sapply(dadaFs, getN), rowSums(seqtab.nochim))
 colnames(track) <- c("input", "filtered", "denoisedF", "nonchim")
@@ -177,7 +147,7 @@ track
 ``` 
 
 
-## Time to asing taxonomy to our ASVs
+## Time to asing taxonomy to our ASVs. We'll use DECIPHER to use the training set from our lab
 
 ```{r}
 library(DECIPHER)
@@ -200,7 +170,6 @@ dim(taxint)
 seqtabint <-as.data.frame(seqtab.nochim)
 seqtabint <- seqtab.nochim[,colnames(seqtab.nochim) %in% rownames(taxint)]
 
-
 load("~/sequences/arc.cassandre.trainingset.RData") 
 dna <- DNAStringSet(getSequences(seqtabint)) # Create a DNAStringSet from the ASVs
 ids <- IdTaxa(dna, trainingSet, strand="both", processors=NULL, verbose=FALSE, threshold = 50)
@@ -211,49 +180,17 @@ taxint <- t(sapply(ids, function(x) {
         taxa
 }))
 colnames(taxint) <- ranks; rownames(taxint) <- getSequences(seqtabint)
-# Enlever les séquences non classifiée
+
+# Remove non-classified sequences
 taxint <-subset(as.data.frame(taxint), domain =="Archaea")
-# Enlever les séquences dans la premiére classification qui sont présente dans la deuxiéme (mieux classifiées)
 taxide <- taxide[!(rownames(taxide) %in% rownames(taxint)),]
-# Fusionner les deux tables de taxonomie
 taxid <- rbind(taxide, as.data.frame(taxint))
-
-
-
-```
-
-
-
-
-
-
-```{r}
-# Identifying the taxonomy
-
-#taxa <- assignTaxonomy(seqtab.nochim, "~/silva_nr99_v138.1_train_set.fa.gz?download=1", multithread=TRUE, tryRC=TRUE)
-
-# Adding the species for each sequence
-
-#taxa.sp <- addSpecies(taxa, "~/silva_species_assignment_v138.1.fa.gz?download=1", allowMultiple = TRUE, tryRC = TRUE)
-
-# Removing sequence rownames for display only
-
-#taxa.print <- taxa.sp 
-#rownames(taxa.print) <- NULL
-#head(taxa.print, n=20)
-
-#View(taxa)
-#View(taxa.sp)
-#View(taxa.print)
-
-
 ```
 
 
 ## Save as .CSV files and save the sequence table
 
 ```{r}
-
 dir.create("sequences/Arc/arc_csv")
 
 # For the taxonomy table
@@ -261,13 +198,11 @@ write.csv(as.data.frame(taxid), file = file.path(filt_path,"arc_csv/ARC_S1_taxon
 
 # For the ASV table
 write.csv(as.data.frame(seqtab.nochim),file = file.path(filt_path,"arc_csv/ASV_Arc1_table.csv")) 
-
 write.csv(as.data.frame(t(seqtab.nochim)),file = file.path(filt_path,"arc_csv/ASV_A1_t_table.csv"))
 
 #Save sequence table and taxonomic annotations to individual files
 saveRDS(seqtab.nochim, file = file.path(filt_path,"arc1_seqtab_nochim.rds"))
 saveRDS(taxid, file.path(filt_path,"arc1_taxa_sp.rds"))
-
 ```
 
 
@@ -275,7 +210,6 @@ saveRDS(taxid, file.path(filt_path,"arc1_taxa_sp.rds"))
 
 ```{r}
 # Let's open all the data we'll need  
-
 library(picante)
 library(vegan)
 library(ggplot2)
@@ -284,35 +218,26 @@ library(ggpubr)
 library(DESeq2)
 library(pheatmap)
 library(phyloseq)
-
 ```
 
 ## Let's also get our DADA2 results
 
 ```{r}
 # load sequence table (nonchimeric ASV abundances in samples)
-
 seqtab.nochim <- readRDS("/home/dpatel/sequences/Arc/arc1_seqtab_nochim.rds")
 
-
 # load taxonomic annotations (taxonomic ID of each ASV)
-
 taxa.sp <- readRDS("/home/dpatel/sequences/Arc/arc1_taxa_sp.rds")
-
 ```
 
 ## Let's create a community and taxonomy object
 
 ```{r}
 # community object from nonchimeric ASV sequence table
-
 comm <- seqtab.nochim
 
-
 # taxonomy object - make sure order of ASVs match between community and taxonomy
-
 taxo <- taxa.sp[colnames(comm),]
-
 ```
 
 
@@ -326,7 +251,6 @@ table(taxo[,"domain"])
 #Well, we have 4 Eukaryota. So those will need to be removed.
 #Let's also put our taxo as a data frame to be able to use phyloseq.
 #We can also use this opportunity to put "NAs".
-
 taxid <- as.data.frame(t(taxo))
 taxid[] <- lapply(taxid, as.character)
 taxid2<- tidyr::fill(taxid, colnames(taxid),.direction = "down")
@@ -336,15 +260,11 @@ taxid <- t(taxid)
 taxid[ taxid == "unclassified_NA" ] <- NA
 
 # Remove unclassified ASV from the taxonomy matrix then from the ASV matrix
-
 taxid <-subset(as.data.frame(taxid), domain =="Archaea")
 comm <- seqtab.nochim[,colnames(comm) %in% rownames(taxid)]
 
 #Let's make sure we only have Eukaryotas
-
 table(taxid[,"domain"])
-
-
 ```
 
 
@@ -355,15 +275,13 @@ table(taxid[,"domain"])
 rowSums(comm)
 
 # visualize log10 number of reads per sample
-
 hist(log10(rowSums(comm)))
-#We have a lot of reads in some samples and very few reads in other (most likely the control samples)
 
+#We have a lot of reads in some samples and very few reads in other (most likely the control samples)
 # log10 of number of reads per ASV
 hist(log10(colSums(comm)))
 
 # Looks like we're going to have a few dominant ASV in our samples
-
 ```
 
 
@@ -376,23 +294,18 @@ comm.pca <- prcomp(decostand(comm,"hellinger"))
 # plot ordination results
 ordiplot(comm.pca, display="sites", type="text",cex=1.0)
 
-# Our samples (except the Tourbiere) are all clustered together
-
+### Our samples (except the Tourbiere) are all clustered together
 
 # Surface plot - plot number of sequences/sample (library size)
-
 ordisurf(comm.pca, rowSums(comm), bubble=TRUE, cex=2,
          main="Library size (sequences/sample)")
 
 # Most of our samples have 14 000 sequences.
 # Let's save the plot
-
 pdf("/home/dpatel/sequences/Arc/arc_Figures/seq_per_sample.pdf")
-
 ordisurf(comm.pca, rowSums(comm), bubble=TRUE, cex=2,
          main="Library size (sequences/sample)")
 dev.off()
-
 ```
 
 
@@ -400,10 +313,8 @@ dev.off()
 
 ```{r}
 # Abundance of ASVs in negative controls
-
 comm['BlancKit',][comm['BlancKit',]>0]
 comm['ctrl-PCR-negh-Lazar',][comm['ctrl-PCR-negh-Lazar',]>0]
-
 ```
 
 
@@ -421,7 +332,6 @@ metadata <- read.csv("/home/dpatel/metadata_Bioreacteur1.csv", header=TRUE, sep=
 head(metadata)
 
 #Phyloseq 
-
 ps <- phyloseq(otu_table(t(comm), taxa_are_rows=TRUE), tax_table(as.matrix(taxid)), sample_data(metadata))
 
 
@@ -432,27 +342,21 @@ ps <- merge_phyloseq(ps, dna)
 
 # Make ASV ID shorter 
 taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
-
 ```
 
 ## Remove the negative controls (decontam)
 
 ```{r}
-
 sample_data(ps)$is.neg <- sample_data(ps)$SampleType == "Controle"
 contamdf.prev <- isContaminant(ps, method="prevalence", neg="is.neg", threshold=0.5)
 table(contamdf.prev$contaminant)
 ps.noncontam <- prune_taxa(!contamdf.prev$contaminant, ps)
 final.ps=subset_samples(ps.noncontam, !SampleType=="Controle")
 
-
-
 #Save the ASVs, taxa and metadata
-
 write.csv(as.data.frame(as(tax_table(final.ps), "matrix")), file = "/home/dpatel/sequences/Arc/arc_csv/noncontam_taxa.csv") 
 write.csv(as.data.frame(as(otu_table(final.ps), "matrix")),file = "/home/dpatel/sequences/Arc/arc_csv/noncontam_asv.csv")
 write.csv(as.data.frame(as(sample_data(final.ps), "matrix")), file="/home/dpatel/sequences/Arc/arc_csv/noncontam_meta.csv")
-
 ```
 
 
@@ -460,29 +364,24 @@ write.csv(as.data.frame(as(sample_data(final.ps), "matrix")), file="/home/dpatel
 ## Visualize the new community composition
 
 ```{r}
-
 # Load our "noncontam" files
-
 noncontam_taxa <- read.csv("/home/dpatel/sequences/Arc/arc_csv/noncontam_taxa.csv", header = TRUE, sep =",", row.names = 1)
 noncontam_asv <- read.csv("/home/dpatel/sequences/Arc/arc_csv/noncontam_asv.csv", header = TRUE, sep =",", row.names = 1)
 noncontam_meta <- read.csv("/home/dpatel/sequences/Arc/arc_csv/noncontam_meta.csv", header=TRUE, sep=",", row.names = 1)
 
 # Puttingg our ASVs and taxonomy into another object 
-
 noncontam_comm <- t(as.data.frame(noncontam_asv))
 noncontam_taxo <- as.data.frame(noncontam_taxa)[colnames(noncontam_comm),]
 
 # PCA on Hellinger-transformed community data
 noncontam.pca <- prcomp(decostand(noncontam_comm,"hellinger"))
 ordiplot(noncontam.pca, display="sites", type="text",cex=1.0)
+### Our samples are all pretty close from each other
 
-# Our samples are all pretty close from each other
 # Let's save the plot
-
 pdf("/home/dpatel/sequences/Arc/arc_Figures/PCA.pdf")
 ordiplot(noncontam.pca, display="sites", type="text",cex=1.0)
 dev.off()
-
 ```
 
 
@@ -490,16 +389,11 @@ dev.off()
 ## Making rarefaction curves 
 
 ```{r}
-
 # What is the smallest number of sequences we have for which sample?
-
 min(rowSums(noncontam_comm))
-
 rowSums(noncontam_comm)
 
-
 # Rarefaction curve for subset of samples
-
 rarecurve(noncontam_comm, step=200, label=TRUE)
 rarecurve(noncontam_comm, step=200, label=TRUE, xlim=c(0,9700))
 
@@ -518,7 +412,6 @@ prunedSet = prune_taxa(keepTaxa, final.ps)
 sample_sums(prunedSet)
 sample_sums(final.ps)
 
-
 rarecurve(t(otu_table(final.ps)), step=50, cex=0.5)
 ps_raref <-rarefy_even_depth(prunedSet, 4000, rngseed=112) 
 
@@ -526,8 +419,5 @@ ps_raref <-rarefy_even_depth(prunedSet, 4000, rngseed=112)
 write.csv(as.data.frame(as(tax_table(ps_raref), "matrix")), file = "/home/dpatel/sequences/Arc/arc_csv/rarefied_taxa.csv") 
 write.csv(as.data.frame(as(otu_table(ps_raref), "matrix")),file = "/home/dpatel/sequences/Arc/arc_csv/rarefied_asv.csv")
 write.csv(as.data.frame(as(sample_data(ps_raref), "matrix")), file="/home/dpatel/sequences/Arc/arc_csv/rarefied_meta.csv") 
-
 ```
-
-
 
