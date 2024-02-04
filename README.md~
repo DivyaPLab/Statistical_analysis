@@ -3,4 +3,4 @@
 Hello,
 You wil find here the statistical analysis performed for the study "Rock surface colonization by groundwater microorganisms in 2 an aquifer system in Quebec, Canada".
 Most test were done the same way for each domain (Bacteria, Eukaryote and Archaea), but to show some of the results found that were not put in the article, we made a fil for each domain.
-I tried my best to seperate an annotate the script to hopefully help explain the step I've done.
+I tried my best to seperate an annotate the script to hopefully help explain the step I've done and to make it easier to read. Somme spaces were added while others were removed.
