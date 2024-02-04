@@ -40,7 +40,7 @@ metadata$richness <- specnumber(ASV_table)
 ```
 
 
-### Separate the Filters from the Rocks. We'll do dataframes WITH and WITHOUT the Terrain data 
+### Separate the Filters from the Rocks. We'll do dataframes WITH and WITHOUT the Terrain (field) data 
 ```{r}
 # So these will be with the Terrain (in both dataframe)
 Filters_all <- metadata[(metadata$SampleType == "Filtre"), ]
@@ -80,25 +80,25 @@ hist(Filters_noT$alpha_diversity)
 qqnorm(Filters_noT$alpha_diversity)
 qqline(Filters_noT$alpha_diversity, distribution = qnorm)
 shapiro.test(Filters_noT$alpha_diversity)
-# W = 0.80208, p-value = 0.001225
+### W = 0.80208, p-value = 0.001225
 
-# The p-value is smaller than 0.05. So the data doesn't follows a normal distribution.
+### The p-value is smaller than 0.05. So the data doesn't follows a normal distribution.
 ```
 
 ### Checking the Homogeneity of Variance
 ```{r}
 fligner.test(alpha_diversity ~ Bioreacteur, data = Filters_noT)
-# Fligner-Killeen:med chi-squared = 0.79133, df = 2, p-value = 0.6732
-# The variance is the same among Bioreacteurs
+### Fligner-Killeen:med chi-squared = 0.79133, df = 2, p-value = 0.6732
+### The variance is the same among Bioreacteurs
 ```
 
 
-### Comparing diversity between Bioreactors (No Terrain)
+### Comparing diversity between Bioreactors (No field data)
 ```{r}
 # To compare our Bioreactors for our Rock and Filter, we'll do a Krulskall Wallis test
 kruskal.test(alpha_diversity ~ Bioreacteur, data = Filters_noT)
-# Kruskal-Wallis chi-squared = 0.38921, df = 2, p-value = 0.8232
-# There is no significant difference between the Bioreactors
+### Kruskal-Wallis chi-squared = 0.38921, df = 2, p-value = 0.8232
+### There is no significant difference between the Bioreactors
 
 ```
 
@@ -106,7 +106,6 @@ kruskal.test(alpha_diversity ~ Bioreacteur, data = Filters_noT)
 ```{r}
 # For this part, we're just using our Filters data without our Terrain in it. I'll have to make another dataframe since I'm missing some data.
 Analyse <- read.table("/home/dpatel/Analyse_geo_merged.csv", header=TRUE, sep=",", row.names = NULL)
-
 Filtres_noT_geo <- merge(Filters_noT_1, Analyse, by = c("Bioreacteur", "Jour"), sort = TRUE)
 
 # We'll do multiple models with the variables
@@ -144,7 +143,6 @@ anova(geo_glm6, geo_glm4, test="Chisq")
 
 summary(geo_glm4)
 plot(geo_glm4)
-
 
 ```
 
