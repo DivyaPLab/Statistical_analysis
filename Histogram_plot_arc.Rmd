@@ -21,7 +21,6 @@ library(randomcoloR)
 
 ### Preparing for the plots GENUS
 ```{r}
-
 asv=read.table("/home/dpatel/sequences/Arc/arc_csv/rarefied_asv.csv", sep=",", row.names=1, header=TRUE, check.names=FALSE) 
 taxa=read.table("/home/dpatel/sequences/Arc/arc_csv/rarefied_taxa.csv", sep=",", row.names=1, header=TRUE) 
 meta=read.table("/home/dpatel/sequences/Arc/arc_csv/rarefied_meta.csv", sep=",", row.names=1, header=TRUE) 
@@ -66,7 +65,7 @@ names(unique_taxonomic_ranks)[names(unique_taxonomic_ranks)=="unique(df_taxon_li
 
 
 
-##### Plot GENUS FOR FILTER
+##### Plot FOR FILTER since there are no ROCK data
 ```{r}
 ## SET COLORS
 # To create a new color range
@@ -77,7 +76,6 @@ my_scale=scale_fill_manual(name=as.character(unique_sources), values = colors, n
 df$Bioreacteur <- ifelse(grepl("^Bleu", df$Bioreacteur), "Bioreactor 1",
                         ifelse(grepl("^Jaune", df$Bioreacteur), "Bioreactor 2",
                          ifelse(grepl("^Rouge", df$Bioreacteur), "Bioreactor 3", "Field")))
-
 
 # Plot
 df$Sample <- gsub("F-", "", df$Sample)
@@ -143,100 +141,4 @@ final_combined_df <- do.call(rbind, combined_dfs)
 
 # Print the final combined dataframe
 final_combined_df
-
-
 ```
-
-
-
-
-###===============================================|PHYLUM|===============================================###
-
-
-
-
-
-
-### Preparing for the plots PHYLUM
-```{r}
-rm(list=ls())
-
-asv=read.table("/home/dpatel/sequences/Arc/arc_csv/rarefied_asv.csv", sep=",", row.names=1, header=TRUE, check.names=FALSE) 
-taxa=read.table("/home/dpatel/sequences/Arc/arc_csv/rarefied_taxa.csv", sep=",", row.names=1, header=TRUE) 
-meta=read.table("/home/dpatel/sequences/Arc/arc_csv/rarefied_meta.csv", sep=",", row.names=1, header=TRUE) 
-
-# Merge into phyloseq object 
-ps=phyloseq(otu_table(asv, taxa_are_rows=TRUE), tax_table(as.matrix(taxa)), sample_data(meta))
-
-# Select taxonomic rank
-taxa_rank="phylum"
-
-# Transform counts to relative abundance and agglomerate to the desired taxonomic rank. Melt phyloseq object to dataframe. 
-
-ps_rel_abund=transform_sample_counts(ps, function(x) x/sum(x)) # get abundance in %
-glom=tax_glom(ps_rel_abund, taxrank = taxa_rank) # agglomerate taxa at the desired taxonomic level
-df=psmelt(glom) # create dataframe from phyloseq object
-
-
-# Create empty list 
-list_of_all_taxonomic_rank= list()
-
-# Loop over every sample_type to combine taxons with a relative abundance < 0.1% 
-data <- data.frame()
-
-for (sample in unique(df$Sample)){
-    table=subset(df, Sample==sample)
-    medians=ddply(table, taxa_rank, function(x) c(median=median(x$Abundance)))
-    remainder <- medians[medians$median <= 0.001,][[1]] # Find taxons whose rel. abund. is less than 0.1%
-    table[table[[taxa_rank]] %in% remainder,][[taxa_rank]]="Other (abundance < 0.1%)" # Change their name to "Other (abondance < 0.1%)"
-    list_of_all_taxonomic_rank <- append(list_of_all_taxonomic_rank,table[[taxa_rank]])
-data = rbind(df,table)
-
-taxon_list=as.data.frame(list_of_all_taxonomic_rank)
-df_taxon_list=as.data.frame(t(taxon_list))
-unique_taxonomic_ranks=as.data.frame(unique(df_taxon_list$V1))
-names(unique_taxonomic_ranks)[names(unique_taxonomic_ranks)=="unique(df_taxon_list$V1)"]=as.character(taxa_rank) # Rename column 
-
-}
-
-
-```
-
-
-
-##### Plot PHYLUM for FILTERS
-```{r}
-
-## SET COLORS
-# To create a new color range
-unique_sources=data.frame(unique(df$Phylum))
-colors= c("#582f0e","#F3E3E2","#AF75A0","#444054","#BFD7EA","#0a9396","#17633F","#83B167","#FDB750","#F24D3C","#89023E","#F2CC8F")
-my_scale=scale_fill_manual(name=as.character(unique_sources), values = colors, na.translate=FALSE, drop=FALSE, limits = force)
-
-
-# Plot
-
-df$Sample <- gsub("F-", "", df$Sample)
-
-df$Sample <- factor(df$Sample, c("P1","P2","P3","P4","Tourb",
-                              "B-J1","B-J3","B-J4","B-J7",
-                              "J-J2","J-J4","J-J5","J-J6","J-J7","J-J9",
-                              "R-J2","R-J3","R-J4","R-J5","R-J6","R-J7","R-J8","R-J9","R-J10")) 
-
-Arc_Phylum=ggplot(df, aes(x=Sample, weight=Abundance, fill=.data[[taxa_rank]])) +
-  geom_bar() +
-  labs(y ='Relative abundance (%)', paste(sample), x = "Filter", ) +
-  scale_y_continuous(expand = c(0,0)) +
-  theme(text = element_text(size = 20),axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  my_scale + 
-  guides(fill=guide_legend(title="Phylum")) +
-  facet_grid(cols = vars(df$Bioreacteur), scales="free", margins = FALSE, drop = F) +
-  ggtitle(" ")
-  
-  
-Arc_Phylum
-ggsave("sequences/Arc/arc_Figures/Arc_Filtre_Phylum.pdf", width = 24, height = 12, plot = last_plot())
-
-
-```
-
