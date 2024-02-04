@@ -36,11 +36,9 @@ ps=phyloseq(otu_table(asv, taxa_are_rows=TRUE), tax_table(as.matrix(taxa)), samp
 taxa_rank="Genus"
 
 # Transform counts to relative abundance and agglomerate to the desired taxonomic rank. Melt phyloseq object to dataframe. 
-
 ps_rel_abund=transform_sample_counts(ps, function(x) x/sum(x)) # get abundance in %
 glom=tax_glom(ps_rel_abund, taxrank = taxa_rank) # agglomerate taxa at the desired taxonomic level
 df=psmelt(glom) # create dataframe from phyloseq object
-
 medians=ddply(df, taxa_rank, function(x) c(median=median(x$Abundance)))
 remainder <- medians[medians$median <= 0.005,][[1]] # Find taxons whose rel. abund. is less than 0.5%
 df[df[[taxa_rank]] %in% remainder,][[taxa_rank]]="Other (abundance < 0.5%)" # Change their name to "Other (abondance < 0.5%)"
@@ -51,7 +49,6 @@ list_of_all_taxonomic_rank= list()
 
 # Loop over every sample_type to combine taxons with a relative abundance < 0.5% 
 data <- data.frame()
-
 for (sample in unique(df$Sample)){
     table=subset(df, Sample==sample)
     medians=ddply(table, taxa_rank, function(x) c(median=median(x$Abundance)))
@@ -59,7 +56,6 @@ for (sample in unique(df$Sample)){
     table[table[[taxa_rank]] %in% remainder,][[taxa_rank]]="Other (abundance < 0.5%)" # Change their name to "Other (abondance < 0.5%)"
     list_of_all_taxonomic_rank <- append(list_of_all_taxonomic_rank,table[[taxa_rank]])
 data = rbind(df,table)
-
 taxon_list=as.data.frame(list_of_all_taxonomic_rank)
 df_taxon_list=as.data.frame(t(taxon_list))
 unique_taxonomic_ranks=as.data.frame(unique(df_taxon_list$V1))
@@ -77,7 +73,6 @@ colors=c("#370617","#9E0000","#FDB750","#F66308","#582f0e","#F2CC8F","#6a994e",
 
 my_scale=scale_fill_manual(name=as.character(unique_sources), values = colors, na.translate=FALSE, drop=FALSE, limits = force)
 
-
 # Ok we have to seperate the Data between Filters and Rocks.  
 Genus_Filters <- df[(df$SampleType == "Filtre"), ]
 Genus_Filters$Sample <- gsub("F-", "", Genus_Filters$Sample)
@@ -94,13 +89,11 @@ Genus_Filters$Bioreacteur <- ifelse(grepl("^B", Genus_Filters$Bioreacteur), "Bio
                         ifelse(grepl("^J", Genus_Filters$Bioreacteur), "Bioreactor 2",
                          ifelse(grepl("^R", Genus_Filters$Bioreacteur), "Bioreactor 3", "Field")))
 
-#write.csv(as.matrix(df), "/home/dpatel/sequences/Bac/bac_csv/relabund.csv")
-
+write.csv(as.matrix(df), "/home/dpatel/sequences/Bac/bac_csv/relabund.csv")
 ```
 
 
-
-##### Plot GENUS FOR FILTER
+##### Plot FOR FILTER
 ```{r}
 
 # Plot
@@ -124,7 +117,7 @@ ggsave("/home/dpatel/sequences/Bac/bac_Figures/Bac_Filtre_Genus2_bac.tiff", widt
 
 ```
 
-# Plot GENUS for ROCKS
+##### Plot FOR ROCKS
 ```{r}
 # Plot
 Genus_Rocks <- df[(df$SampleType == "Roche"),] 
@@ -147,139 +140,8 @@ bac_Genus2=ggplot(Genus_Rocks, aes(x=Sample, weight=Abundance, fill=.data[[taxa_
   guides(fill=guide_legend(title="Genus", nrow = 22)) +
   facet_grid(cols = vars(Genus_Rocks$Bioreacteur), scales="free", margins = FALSE, drop = F) +
   ggtitle(" ")
-  
 
 bac_Genus2
 ggsave("/home/dpatel/sequences/Bac/bac_Figures/Bac_Roche_Genus2.tiff", width = 24, height = 12, plot = last_plot())
-
-
 ```
-
-
-
-
-
-###===============================================|PHYLUM|===============================================###
-
-
-
-
-
-
-### Preparing for the plots PHYLUM
-```{r}
-
-asv=read.table("/home/dpatel/sequences/Bac/bac_csv/rarefied_asv.csv", sep=",", row.names=1, header=TRUE, check.names=FALSE) 
-taxa=read.table("/home/dpatel/sequences/Bac/bac_csv/rarefied_taxa.csv", sep=",", row.names=1, header=TRUE) 
-meta=read.table("/home/dpatel/sequences/Bac/bac_csv/rarefied_meta.csv", sep=",", row.names=1, header=TRUE) 
-
-# Merge into phyloseq object 
-ps=phyloseq(otu_table(asv, taxa_are_rows=TRUE), tax_table(as.matrix(taxa)), sample_data(meta))
-
-# Select taxonomic rank
-taxa_rank="Phylum"
-
-# Transform counts to relative abundance and agglomerate to the desired taxonomic rank. Melt phyloseq object to dataframe. 
-
-ps_rel_abund=transform_sample_counts(ps, function(x) x/sum(x)) # get abundance in %
-glom=tax_glom(ps_rel_abund, taxrank = taxa_rank) # agglomerate taxa at the desired taxonomic level
-df=psmelt(glom) # create dataframe from phyloseq object
-
-
-# Create empty list 
-list_of_all_taxonomic_rank= list()
-
-# Loop over every sample_type to combine taxons with a relative abundance < 0.1% 
-data <- data.frame()
-
-for (sample in unique(df$Sample)){
-    table=subset(df, Sample==sample)
-    medians=ddply(table, taxa_rank, function(x) c(median=median(x$Abundance)))
-    remainder <- medians[medians$median <= 0.001,][[1]] # Find taxons whose rel. abund. is less than 0.1%
-    table[table[[taxa_rank]] %in% remainder,][[taxa_rank]]="Other (abundance < 0.1%)" # Change their name to "Other (abondance < 0.1%)"
-    list_of_all_taxonomic_rank <- append(list_of_all_taxonomic_rank,table[[taxa_rank]])
-data = rbind(df,table)
-
-taxon_list=as.data.frame(list_of_all_taxonomic_rank)
-df_taxon_list=as.data.frame(t(taxon_list))
-unique_taxonomic_ranks=as.data.frame(unique(df_taxon_list$V1))
-names(unique_taxonomic_ranks)[names(unique_taxonomic_ranks)=="unique(df_taxon_list$V1)"]=as.character(taxa_rank) # Rename column 
-
-}
-
-
-```
-
-
-
-##### Plot PHYLUM for FILTERS
-```{r}
-
-## SET COLORS
-# To create a new color range
-unique_sources=data.frame(unique(df$Phylum))
-colors = c("#264653", "#BFD7EA","#A0785A","#2a9d8f","#FF7C80","#77BC48","#FDB750","#F9853D","#9E0000","#ffd899","#936FAC") 
-my_scale=scale_fill_manual(name=as.character(unique_sources), values = colors, na.translate=FALSE, drop=FALSE, limits = force)
-
-
-# Saving the color palette for future use 
-#saveRDS(palette, "/home/dpatel/sequences/bac/colors_class.rds")
-
-# Plot
-Phylum_Filters <- df[(df$SampleType == "Filtre"), ]
-Phylum_Filters$Sample <- gsub("F-", "", Phylum_Filters$Sample)
-
-Phylum_Filters$Sample <- factor(Phylum_Filters$Sample, c("P1","P2","P3","P4","Tourb",
-                              "B-J1","B-J2","B-J3","B-J4","B-J5","B-J6","B-J7","B-J8","B-J9","B-J11",
-                              "J-J1","J-J2","J-J3","J-J4","J-J5","J-J6","J-J7","J-J8","J-J9","J-J11",
-                              "R-J1","R-J2","R-J3","R-J4","R-J5","R-J6","R-J7","R-J8","R-J9","R-J10")) 
-
-
-bac_Phylum=ggplot(Phylum_Filters, aes(x=Sample, weight=Abundance, fill=.data[[taxa_rank]])) +
-  geom_bar() +
-  labs(y ='Relative abundance (%)', paste(sample), x = "Filter" ) +
-  scale_y_continuous(expand = c(0,0)) +
-  theme(text = element_text(size = 20),axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  my_scale + 
-  guides(fill=guide_legend(title="Phylum")) +
-  facet_grid(cols = vars(Phylum_Filters$Bioreacteur), scales="free", margins = FALSE, drop = F) +
-  ggtitle(" ")
-  
-  
-bac_Phylum
-#ggsave("sequences/Bac/bac_Figures/Bac_Filtre_Phylum.pdf", width = 24, height = 12, plot = last_plot())
-
-
-```
-
-##### Plot PHYLUM for ROCKS
-```{r}
-# Plot
-Phylum_Rocks <- df[(df$SampleType == "Roche"),] 
-Phylum_Rocks$Sample <- gsub("R-", "", Phylum_Rocks$Sample)
-
-Phylum_Rocks$Sample <- factor(Phylum_Rocks$Sample, c("B1B","B5B","B7B","B8B","B2M","B3M","B4M","B6M","B1H","B3H","B6H","B7H",
-                                                   "J3B","J7B","J8B","J1M","J3M","J7M","J8M","J2H","J4H","J6H",
-                                                   "R1B","R2B","R5B","R7B","R2M","R3M","R6M","R7M","R1H","R4H","R5H","R8H"))
-
-
-bac_Phylum=ggplot(Phylum_Rocks, aes(x=Sample, weight=Abundance, fill=.data[[taxa_rank]])) +
-  geom_bar() +
-  labs(y ='Relative abundance (%)', paste(sample), x = "Rock", ) +
-  scale_y_continuous(expand = c(0,0)) +
-  theme(text = element_text(size = 20),axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  my_scale + 
-  guides(fill=guide_legend(title="Phylum")) +
-  facet_grid(cols = vars(Phylum_Rocks$Bioreacteur), scales="free", margins = FALSE, drop = F) +
-  ggtitle(" ")
-  
-  
-bac_Phylum
-#ggsave("sequences/Bac/bac_Figures/Bac_Roche_Phylum.pdf", width = 24, height = 12, plot = last_plot())
-
-
-```
-
-
-
 
