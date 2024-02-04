@@ -8,12 +8,11 @@ output:
   word_document: default
 ---
 
-## Installing packages
+## Installing packages (The functions have an # to avoid running the script every time)
 
 ```{r setup}
 knitr::opts_chunk$set(message = FALSE, include = FALSE)
 # install packages from CRAN
-
 #install.packages(pkgs = c("Rcpp", "RcppArmadillo", "picante", "ggpubr", "pheatmap"), dependencies = TRUE)
 #install.packages("ANCOMBC")
 
@@ -22,9 +21,7 @@ knitr::opts_chunk$set(message = FALSE, include = FALSE)
 # if the dada2 install returns a warning for BiocParallel, install from binary using this command:
 
 #BiocManager::install("BiocParallel", version = "3.14", type="binary", update = FALSE)
-
 #BiocManager::install("DESeq2")
-
 #BiocManager::install("phyloseq")
 
 # install dada2 if needed
@@ -34,67 +31,52 @@ knitr::opts_chunk$set(message = FALSE, include = FALSE)
 
 #install package Rcpp
 #install.packages("Rcpp")
-
 #install.packages("nloptr")
-
 ```
+
+
 
 ## Opening DADA2 and setting our working directory for our Bacteria files
 
 ```{r}
-
 library(dada2); packageVersion("dada2")
-
 
 #Setting a path to the FASTQ files
 #Here I'm focusing on my Bacterias
-
 path <-"~/sequences/Bac/bac_fastq"
 
 #Just going to make sure the path is leading to the .fastq files
-
 list.files(path) 
 
 #Alrigth, looks like it worked! ^.^
-
-
 ```
 
 
 ## Seperate the Forward and Reverse fastq files
 
 ```{r}
-
 # Identify forward and reverse reads
 # Filenames containing R1 are forward reads, R2 are reverse reads.
-
 fnFs <- sort(list.files(path, pattern="R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path, pattern="R2_001.fastq", full.names = TRUE))
-
 ```
 
 
 ## Assign the filenames for the filtered fastq.gz files and place in filtered subdirectory 
 
 ```{r}
-
 sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
 
 # We'll still have the "-bac" at the end of the file names. 
 #To remove that, we'll use gsub()
-
 sample.names <- gsub("-bac", "", sample.names)
 
 # Let's make sure the previous functions worked
-
 sample.names
 
 #Ok we did it. Now, let's put the files in a subdirectory
-
 filtFs <- file.path("~/sequences/Bac/filtered", paste0(sample.names, "_F_filt.fastq.gz"))
-
 filtRs <- file.path("~/sequences/Bac/filtered", paste0(sample.names, "_R_filt.fastq.gz"))
-
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 ``` 
@@ -104,28 +86,22 @@ names(filtRs) <- sample.names
 
 ```{r}
 #First, we can look at some of the Forwards sequences for Filter samples
-
 #plotQualityProfile(fnFs[9:18])
 
 #Let's save these plots
-
-#ggsave("sequences/Bac/bac_Figures/Bac_qualityplot_Filtres_Forward.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
+ggsave("sequences/Bac/bac_Figures/Bac_qualityplot_Filtres_Forward.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
 
 #Then, some of the Forwards sequences for Rock samples 
-
-#plotQualityProfile(fnFs[40:50])
-#ggsave("sequences/Bac/bac_Figures/Bac_qualityplot_Roches_Forward.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
+plotQualityProfile(fnFs[40:50])
+ggsave("sequences/Bac/bac_Figures/Bac_qualityplot_Roches_Forward.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
 
 #Now we can look at some of the Reverse sequences for Filter samples
-
-#plotQualityProfile(fnRs[9:18])
-#ggsave("sequences/Bac/bac_Figures/Bac_qualityplot_Filtres_Reverse.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
+plotQualityProfile(fnRs[9:18])
+ggsave("sequences/Bac/bac_Figures/Bac_qualityplot_Filtres_Reverse.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
 
 #And finally, some of the Reverse sequences for Rock samples
-
-#plotQualityProfile(fnRs[40:50])
-#ggsave("sequences/Bac/bac_Figures/Bac_qualityplot_Roches_Reverse.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
-
+plotQualityProfile(fnRs[40:50])
+ggsave("sequences/Bac/bac_Figures/Bac_qualityplot_Roches_Reverse.pdf", height = 8, width = 12, dpi = 16, plot = last_plot())
 ```
 
 
@@ -135,26 +111,21 @@ names(filtRs) <- sample.names
 ## For the reverse, we'll remove the first 21 nucleotides (size of the primer).
 ## We'll trim the last nucleotides at position 250 (trimming the last 50 nucleotides) to avoid errors
 ```{r}
-
 out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(250,200),
                      maxN=0, maxEE=c(5,5), truncQ=2, trimLeft=c(17,21),
                      compress=TRUE, multithread=TRUE) 
-#out
-
+out
 ```
 
 
 ## Let's now look at the error rate
 
 ```{r}
-
 errF <- learnErrors(filtFs, multithread=TRUE, randomize=TRUE)
-#101502023 total bases in 435631 reads from 18 samples will be used for learning the error rates.
-
+###101502023 total bases in 435631 reads from 18 samples will be used for learning the error rates.
 
 errR <- learnErrors(filtRs, multithread=TRUE, randomize=TRUE)
-#101447176 total bases in 566744 reads from 24 samples will be used for learning the error rates.
-
+###101447176 total bases in 566744 reads from 24 samples will be used for learning the error rates.
 ```
 
 
@@ -166,7 +137,6 @@ derepRs <- derepFastq(filtRs, verbose=TRUE)
 
 
 # Name the derep-class objects by the sample names
-
 names(derepFs) <- sample.names
 names(derepRs) <- sample.names
 
@@ -177,8 +147,8 @@ dadaRs <- dada(filtRs, err=errR, pool="pseudo", multithread=TRUE)
 # Inspect the returned dada-class object:
 #dadaFs[[1]]
 
-# Result = dada-class: object describing DADA2 denoising results
-# 122 sequence variants were inferred from 7702 input unique sequences.
+### Result = dada-class: object describing DADA2 denoising results
+### 122 sequence variants were inferred from 7702 input unique sequences.
 
 ```
 
@@ -188,44 +158,36 @@ dadaRs <- dada(filtRs, err=errR, pool="pseudo", multithread=TRUE)
 ```{r}
 
 # First, we merge the paired reads
-
 mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs)
 
 # Before continuing, let's look at the data.frame (first sample only)
-
 #head(mergers[[1]])
 
 # Construct an amplicon sequence variant table (ASV) table and check the dimension of it
-
 seqtab <- makeSequenceTable(mergers)
 dim(seqtab)
-
-#[1]    79 14337
+###[1]    79 14337
 
 # Inspect distribution of sequence lengths
-
-#table(nchar(getSequences(seqtab)))
-#The majority of the sequences are 400 nucleotides
+table(nchar(getSequences(seqtab)))
+###The majority of the sequences are 400 nucleotides
 
 
 # Remove chimeras 
-
 seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE)
 
 
 #View dimension of your matrices 
+dim(seqtab.nochim)
+sum(seqtab.nochim)/sum(seqtab)
 
-#dim(seqtab.nochim)
-#sum(seqtab.nochim)/sum(seqtab)
-
-#[1]   79 5712
-#[1] 0.8088081
+###[1]   79 5712
+###[1] 0.8088081
 ``` 
 
 ## Track reads through the pipeline
 ```{r}
 # Obtain the count of how many sequences were deleted at each steps. 
-
 getN <- function(x) sum(getUniques(x))
 track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
 colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
@@ -237,32 +199,24 @@ track
 
 
 ```{r}
-
-#Mettre dans le terminal
+#Put this section in the terminal
 
 #wget  https://zenodo.org/record/4587955/files/silva_species_assignment_v138.1.fa.gz?download=1
 
 #wget https://zenodo.org/record/4587955/files/silva_nr99_v138.1_train_set.fa.gz?download=1
-
-
 ```
-
 
 
 ## Now, we can assing the taxonomy to our ASVs
 
 ```{r}
-
 # Identifying the taxonomy
-
 taxa <- assignTaxonomy(seqtab.nochim, "~/silva_nr99_v138.1_train_set.fa.gz?download=1", multithread=TRUE, tryRC=TRUE)
 
 # Adding the species for each sequence
-
 taxa.sp <- addSpecies(taxa,  "~/silva_species_assignment_v138.1.fa.gz?download=1", allowMultiple = TRUE, tryRC = TRUE)
 
 # Removing sequence rownames for display only
-
 taxa.print <- taxa.sp 
 rownames(taxa.print) <- NULL
 head(taxa.print, n=20)
@@ -270,20 +224,16 @@ head(taxa.print, n=20)
 #View(taxa)
 #View(taxa.sp)
 #View(taxa.print)
-
 ```
 
 ## Save as .CSV files and save the sequence table
 
 ```{r}
-
 # For the taxonomy table
-
 write.csv(as.data.frame(taxa.print), file = file.path("~/sequences/Bac/bac_csv/BAC_S1_taxonomy_table.csv")) 
 
 
 # For the ASV table
-
 write.csv(as.data.frame(seqtab.nochim),
           file = file.path("~/sequences/Bac/bac_csv/ASV_bac1_table.csv")) 
 
@@ -291,10 +241,8 @@ write.csv(as.data.frame(t(seqtab.nochim)),
           file = file.path("~/sequences/Bac/bac_csv/ASV_S1_t_table.csv"))
 
 #Save sequence table and taxonomic annotations to individual files
-
 saveRDS(seqtab.nochim, file = file.path("~/sequences/Bac/bac1_seqtab_nochim.rds"))
 saveRDS(taxa.sp, file = file.path("~/sequences/Bac/bac1_taxa_sp.rds"))
-
 ```
 
 
@@ -311,35 +259,26 @@ library(ggpubr)
 library(DESeq2)
 library(pheatmap)
 library(phyloseq)
-
 ```
 
 ## Let's also get our DADA2 results
 
 ```{r}
 # load sequence table (nonchimeric ASV abundances in samples)
-
 seqtab.nochim <- readRDS("~/sequences//Bac/bac1_seqtab_nochim.rds")
 
-
 # load taxonomic annotations (taxonomic ID of each ASV)
-
 taxa.sp <- readRDS("~/sequences/Bac/bac1_taxa_sp.rds")
-
 ```
 
 ## Let's create a community and taxonomy object
 
 ```{r}
 # community object from nonchimeric ASV sequence table
-
 comm <- seqtab.nochim
 
-
 # taxonomy object - make sure order of ASVs match between community and taxonomy
-
 taxo <- taxa.sp[colnames(comm),]
-
 ```
 
 
@@ -370,7 +309,6 @@ comm <- seqtab.nochim[,colnames(comm) %in% rownames(taxid)]
 #Let's make sure we only have Bacterias
 
 table(taxid[,"Kingdom"])
-
 ```
 
 
@@ -381,7 +319,6 @@ table(taxid[,"Kingdom"])
 rowSums(comm)
 
 # visualize log10 number of reads per sample
-
 hist(log10(rowSums(comm)))
 #We have a lot of reads in some samples and very few reads in other (most likely the control samples)
 
@@ -389,7 +326,6 @@ hist(log10(rowSums(comm)))
 hist(log10(colSums(comm)))
 
 # Looks like we're going to have a few dominant ASV in our samples
-
 ```
 
 
@@ -404,22 +340,17 @@ ordiplot(comm.pca, display="sites", type="text",cex=1.0)
 
 # Our samples (except the Tourbière) are all seperate from our Controls (CRTL) and negatives
 
-
 # Surface plot - plot number of sequences/sample (library size)
-
 ordisurf(comm.pca, rowSums(comm), bubble=TRUE, cex=2,
          main="Library size (sequences/sample)")
 
 # Only 6 of the samples are bellow 2 000 sequences
 # Let's save the plot
-
 pdf("~/sequences/Bac/bac_Figures/seq_per_sample.pdf")
 
 ordisurf(comm.pca, rowSums(comm), bubble=TRUE, cex=2,
          main="Library size (sequences/sample)")
 dev.off()
-
-
 ```
 
 
@@ -427,7 +358,6 @@ dev.off()
 
 ```{r echo=TRUE, results='hide'}
 # Abundance of ASVs in negative controls
-
 comm['BlancKit',][comm['BlancKit',]>0]
 comm['CRTL-B4B',][comm['CRTL-B4B',]>0]
 comm['CRTL-B5H',][comm['CRTL-B5H',]>0]
@@ -436,7 +366,6 @@ comm['CRTL-J2M',][comm['CRTL-J2M',]>0]
 comm['CRTL-R3H',][comm['CRTL-R3H',]>0]
 comm['CRTL-R6M',][comm['CRTL-R6M',]>0]
 comm['CTRL-PCR-neg',][comm['CTRL-PCR-neg',]>0]
-
 ```
 
 
@@ -447,7 +376,6 @@ library(Biostrings); packageVersion("Biostrings")
 library(decontam)
 library(phyloseq)
 
-
 # load metadata
 metadata <- read.csv("/home/dpatel/metadata_Bioreacteur1.csv", header=TRUE, sep=",", row.names = 1)
 
@@ -455,7 +383,6 @@ metadata <- read.csv("/home/dpatel/metadata_Bioreacteur1.csv", header=TRUE, sep=
 head(metadata)
 
 #Phyloseq 
-
 ps <- phyloseq(otu_table(t(comm), taxa_are_rows=TRUE), tax_table(as.matrix(taxid)), sample_data(metadata))
 
 
@@ -466,26 +393,21 @@ ps <- merge_phyloseq(ps, dna)
 
 # Make ASV ID shorter 
 taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
-
 ```
 
 ## Remove the negative controls (decontam)
 
 ```{r}
-
 sample_data(ps)$is.neg <- sample_data(ps)$SampleType == "Controle"
 contamdf.prev <- isContaminant(ps, method="prevalence", neg="is.neg", threshold=0.5)
 table(contamdf.prev$contaminant)
 ps.noncontam <- prune_taxa(!contamdf.prev$contaminant, ps)
 final.ps=subset_samples(ps.noncontam, !SampleType=="Controle")
 
-
 #Save the ASVs, taxa and metadata
-
 write.csv(as.data.frame(as(tax_table(final.ps), "matrix")), file = "~/sequences/Bac/bac_csv/noncontam_taxa.csv") 
 write.csv(as.data.frame(as(otu_table(final.ps), "matrix")),file = "~/sequences/Bac/bac_csv/noncontam_asv.csv")
 write.csv(as.data.frame(as(sample_data(final.ps), "matrix")), file="~/sequences/Bac/bac_csv/noncontam_meta.csv")
-
 ```
 
 
@@ -495,13 +417,11 @@ write.csv(as.data.frame(as(sample_data(final.ps), "matrix")), file="~/sequences/
 ```{r echo=TRUE, results='hide'}
 
 # Load our "noncontam" files
-
 noncontam_taxa <- read.csv("~/sequences/Bac/bac_csv/noncontam_taxa.csv", header = TRUE, sep =",", row.names = 1)
 noncontam_asv <- read.csv("~/sequences/Bac/bac_csv/noncontam_asv.csv", header = TRUE, sep =",", row.names = 1)
 noncontam_meta <- read.csv("~/sequences/Bac/bac_csv/noncontam_meta.csv", header=TRUE, sep=",", row.names = 1) [,-7]
 
 # Puttingg our ASVs and taxonomy into another object 
-
 noncontam_comm <- t(as.data.frame(noncontam_asv))
 noncontam_taxo <- as.data.frame(noncontam_taxa)[colnames(noncontam_comm),]
 
@@ -511,11 +431,9 @@ ordiplot(noncontam.pca, display="sites", type="text",cex=1.0)
 
 # Our samples are pretty scattered with some grouped together
 # Let's save the plot
-
 pdf("/home/dpatel/sequences/Bac/bac_Figures/PCA.pdf")
 ordiplot(noncontam.pca, display="sites", type="text",cex=1.0)
 dev.off()
-
 ```
 
 
@@ -523,14 +441,12 @@ dev.off()
 ## Making rarefaction curves 
 
 ```{r}
-
 # What is the smallest number of sequences/sample for subset of samples?
 
 min(rowSums(noncontam_comm))
 rowSums(noncontam_comm)
 
 # Rarefaction curve for subset of samples
-
 rarecurve(noncontam_comm, step=200, label=TRUE)
 rarecurve(noncontam_comm, step=200, label=TRUE, xlim=c(0,3000))
 
@@ -557,7 +473,6 @@ ps_raref <-rarefy_even_depth(prunedSet, 2300, rngseed=112)
 write.csv(as.data.frame(as(tax_table(ps_raref), "matrix")), file = "~/sequences/Bac/bac_csv/rarefied_taxa.csv") 
 write.csv(as.data.frame(as(otu_table(ps_raref), "matrix")),file = "~/sequences/Bac/bac_csv/rarefied_asv.csv")
 write.csv(as.data.frame(as(sample_data(ps_raref), "matrix")), file="~/sequences/Bac/bac_csv/rarefied_meta.csv") 
-
 ```
 
 
