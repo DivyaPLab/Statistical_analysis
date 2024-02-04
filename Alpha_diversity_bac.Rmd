@@ -21,13 +21,11 @@ library(tidyr)
 library(dplyr)
 library(FSA)
 library(ggplot2)
-
 ```
 
 
 ### Loading all files needed here and seperating certain dataframes
 ```{r}
-
 # Load ASV table and metadata
 ASV_table <- t(read.table("~/sequences/Bac/bac_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
 metadata <- read.table("~/sequences/Bac/bac_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
@@ -39,7 +37,6 @@ metadata <- metadata %>% select(-is.neg)
 # We'll also change the name of the first column to "Nom"
 metadata$X <- gsub("-", ".", metadata$X)
 colnames(metadata)[1] <- "Nom"
-
 ```
 
 ### Calculate the ALPHA DIVERSITY
@@ -49,7 +46,7 @@ metadata$alpha_diversity <- diversity(ASV_table, index = "shannon")
 metadata$richness <- specnumber(ASV_table)
 ```
 
-### Separate the Filters from the Rocks. We'll do dataframes WITH and WITHOUT the Terrain data 
+### Separate the Filters from the Rocks. We'll do dataframes WITHOUT the Terrain data 
 ```{r}
 # So these will be with the Terrain (in both dataframe)
 Filters_all <- metadata[(metadata$SampleType == "Filtre"), ]
@@ -102,32 +99,32 @@ hist(Filters_noT$alpha_diversity)
 qqnorm(Filters_noT$alpha_diversity)
 qqline(Filters_noT$alpha_diversity, distribution = qnorm)
 shapiro.test(Filters_noT$alpha_diversity)
-# W = 0.9882, p-value = 0.9787
+### W = 0.9882, p-value = 0.9787
 
 hist(Rocks_noT$alpha_diversity)
 shapiro.test(Rocks_noT$alpha_diversity)
-# W = 0.95556, p-value = 0.2376
-# In both cases, the p-value is greater than 0.05. So the data follows a normal distribution.
+### W = 0.95556, p-value = 0.2376
+### In both cases, the p-value is greater than 0.05. So the data follows a normal distribution.
 
 # Let's look at the RFonly
 shapiro.test(RFonly$alpha_diversity)
-# W = 0.91465, p-value = 0.0004705
-# So it doesn't follow a normal distribution
+### W = 0.91465, p-value = 0.0004705
+### So it doesn't follow a normal distribution
 ```
 
 ### Checking the Homogeneity of Variance
 ```{r}
 bartlett.test(alpha_diversity ~ Bioreacteur, data = Filters_noT)
-# Bartlett's K-squared = 1.736, df = 2, p-value = 0.4198
-# They have the same variance among Bioreactors
+### Bartlett's K-squared = 1.736, df = 2, p-value = 0.4198
+### They have the same variance among Bioreactors
 
 bartlett.test(alpha_diversity ~ Bioreacteur, data = Rocks_noT)
-# Bartlett's K-squared = 7.3023, df = 2, p-value = 0.02596
-# The variance is different among Bioreactors
+### Bartlett's K-squared = 7.3023, df = 2, p-value = 0.02596
+### The variance is different among Bioreactors
 
 fligner.test(alpha_diversity ~ SampleType, data = RFonly)
-# Fligner-Killeen:med chi-squared = 12.595, df = 1, p-value = 0.0003869
-# The variance is different among SampleType
+### Fligner-Killeen:med chi-squared = 12.595, df = 1, p-value = 0.0003869
+### The variance is different among SampleType
 ```
 
 
@@ -135,18 +132,17 @@ fligner.test(alpha_diversity ~ SampleType, data = RFonly)
 ```{r}
 # To compare our Bioreactors for our Rock and Filter, we'll do a Krulskall Wallis test
 kruskal.test(alpha_diversity ~ Bioreacteur, data = Filters_noT)
-# Kruskal-Wallis chi-squared = 4.2606, df = 2, p-value = 0.1188
-# There is no significant difference between the Bioreactors
+### Kruskal-Wallis chi-squared = 4.2606, df = 2, p-value = 0.1188
+### There is no significant difference between the Bioreactors
 
 kruskal.test(alpha_diversity ~ Bioreacteur, data = Rocks_noT)
-# Kruskal-Wallis chi-squared = 10.606, df = 2, p-value = 0.004978
-# There is a significant difference between the Bioreactors
+### Kruskal-Wallis chi-squared = 10.606, df = 2, p-value = 0.004978
+### There is a significant difference between the Bioreactors
 
 # To compare our SampleType, we'll do a Krulskall Wallis test
 kruskal.test(alpha_diversity ~ SampleType, data = RFonly)
-# Kruskal-Wallis chi-squared = 31.729, df = 1, p-value = 1.772e-08
-# There is a significant difference between the SampleType
-
+### Kruskal-Wallis chi-squared = 31.729, df = 1, p-value = 1.772e-08
+### There is a significant difference between the SampleType
 ```
 
 
@@ -191,10 +187,7 @@ anova(geo_glm7, geo_glm5, test="Chisq")
 # So it seems like the NH4 is an important parameter and that we must keep it.
 
 # Now, let's look at the results of our glm and also we should look at the Residuals
-
 summary(geo_glm5)
 plot(geo_glm5)
-
-
 ```
 
