@@ -1,0 +1,512 @@
+---
+title: "STAT"
+author: "Divya"
+date: "2023-01-24"
+output:
+  html_document: default
+  word_document: default
+---
+
+
+#### Open the libraries we'll need
+```{r setup}
+knitr::opts_chunk$set(echo = FALSE)
+rm(list=ls())
+library(MASS)
+library(tidyr)
+library(stats)
+library(ggplot2)
+library(dplyr)
+```
+
+
+### Open the .csv file 
+```{r echo=TRUE}
+
+Analyse <- read.csv("Analyse_geo_Test1.csv", header = TRUE, sep = ",", dec = "." )
+
+head(Analyse)
+```
+
+
+
+
+#_________________________________________|DIC|_________________________________________#
+
+### Create a dataframe with the mean and sd of DIC based on Bioreactor and the day (Jour) 
+```{r echo=TRUE}
+df <- data.frame()
+
+for(i in unique(Analyse$Jour)) {
+  
+  subset(Analyse, Jour  == i) -> data_Jour
+  
+  aggregate(DIC.mg.L. ~ Bioreacteur, data = data_Jour, mean, na.rm = TRUE) -> DIC_moy
+  
+  aggregate(DIC.mg.L. ~ Bioreacteur, data = data_Jour, sd, na.rm = TRUE) -> DIC_sd
+  
+  df <- rbind(df,data.frame(DIC_moy,DIC_sd))
+  
+}
+print(df)
+
+
+#### Rearrange the rows to have all "Bleu", "Jaune", "Rouge" in that order + Remove the Tourb and Puit row.
+#### We should also have to make sure that the data got rearranged and that the Tourb and Puit row got deleted.
+df <- df %>% arrange(factor(Bioreacteur, levels = c("Bleu", "Jaune", "Rouge")))
+df <- df[-c(31,32),]
+tail(df, 20)
+
+
+#### Let's rename the Bioreacteur.1 column as "Jour" since that column is pretty useless for us.
+#### While we're at it, we can also change the name of our other column so that they represent the values properly.
+#### Plus, let's also make sure our changes worked
+colnames(df)[colnames(df) == "Bioreacteur.1"] <- "Jour"
+colnames(df)[colnames(df) == "DIC.mg.L."] <- "Moy"
+colnames(df)[colnames(df) == "DIC.mg.L..1"] <- "Sd"
+
+head(df, 1)
+
+
+#### Now, we have to put the number of the days. Let's just use the long (but simple) way using our old friend "c()". 
+#### Also, we should look at what we did.
+df$Jour <- as.numeric(c("6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24"))
+
+#### We'll change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+df$Bioreacteur <- ifelse(grepl("^B", df$Bioreacteur), "Bioreactor 1",
+                        ifelse(grepl("^J", df$Bioreacteur), "Bioreactor 2",
+                         ifelse(grepl("^R", df$Bioreacteur), "Bioreactor 3", " ")))
+
+head(df,15)
+
+#### Alright, everything looks good ^.^ Let's start doing some tests
+```
+
+### Visualize the data 
+```{r message=TRUE, echo=TRUE}
+Box_Dic <-ggplot(df, aes(x = Bioreacteur, y = Moy)) + 
+      geom_boxplot() + 
+      xlab("") +
+      ylab("Average DIC (mg/L)") +
+      theme(text = element_text(size = 14))
+Box_Dic
+ggsave("C:/Users/patel/OneDrive/Documents/Maitrise/1.Test_1/2.Figures/Box_DIC.jpeg", plot = last_plot())
+```
+
+### Let's see if our data follows a normal distribution 
+### Let's see if the variation is homogenous 
+```{r echo=TRUE}
+shapiro.test(df$Moy)
+# W = 0.76882, p-value = 1.862e-05
+# It does not have a normal distribution. We have to do a Flinger test
+
+fligner.test(Moy ~ Bioreacteur, data = df)
+#Fligner-Killeen:med chi-squared = 0.46147, df = 2, p-value = 0.7939
+# The variance is homogenous.
+```
+
+
+### Doing the Kruskal-Wallis test 
+```{r echo=TRUE}
+kruskal.test(Moy ~ Bioreacteur, data = df)
+
+# Kruskal-Wallis chi-squared = 0.54799, df = 2, p-value = 0.7603
+# Since p-value is bigger than 0.05, there are no statistical difference between the bioreactors.
+```
+
+
+
+
+
+#_________________________________________|DOC|_________________________________________#
+
+### Create a dataframe with the mean and sd of DOC based on Bioreactor and the day (Jour) 
+```{r}
+df <- data.frame()
+
+for(i in unique(Analyse$Jour)) {
+  
+  subset(Analyse, Jour  == i) -> data_Jour
+  
+  aggregate(DOC.mg.L. ~ Bioreacteur, data = data_Jour, mean, na.rm = TRUE) -> DOC_moy
+  
+  aggregate(DOC.mg.L. ~ Bioreacteur, data = data_Jour, sd, na.rm = TRUE) ->DOC_sd
+  
+  df <- rbind(df,data.frame(DOC_moy,DOC_sd))
+  
+}
+#print(df)
+
+
+#### Rearrange the rows to have all "Bleu", "Jaune", "Rouge" in that order + Remove the Tourb and Puit row.
+#### We should also have to make sure that the data got rearranged and that the Tourb and Puit row got deleted.
+df <- df %>% arrange(factor(Bioreacteur, levels = c("Bleu", "Jaune", "Rouge")))
+df <- df[-c(31,32),]
+#tail(df, 20)
+
+
+#### Let's rename the Bioreacteur.1 column as "Jour" since that column is pretty useless for us.
+#### While we're at it, we can also change the name of our other column so that they represent the values properly.
+#### Plus, let's also make sure our changes worked
+colnames(df)[colnames(df) == "Bioreacteur.1"] <- "Jour"
+colnames(df)[colnames(df) == "DOC.mg.L."] <- "Moy"
+colnames(df)[colnames(df) == "DOC.mg.L..1"] <- "Sd"
+
+#head(df, 1)
+
+#### Now, we have to put the number of the days. Let's just use the long (but simple) way using our old friend "c()". 
+#### Also, we should look at what we did.
+df$Jour <- as.numeric(c("6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24"))
+
+#### We'll change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+df$Bioreacteur <- ifelse(grepl("^B", df$Bioreacteur), "Bioreactor 1",
+                        ifelse(grepl("^J", df$Bioreacteur), "Bioreactor 2",
+                         ifelse(grepl("^R", df$Bioreacteur), "Bioreactor 3", " ")))
+```
+
+
+### Visualisze the data
+```{r}
+Box_Doc <-ggplot(df, aes(x = Bioreacteur, y = Moy)) + 
+      geom_boxplot() + 
+      xlab("") +
+      ylab("Average DOC (mg/L)") +
+      theme(text = element_text(size = 14))
+Box_Doc
+ggsave("C:/Users/patel/OneDrive/Documents/Maitrise/1.Test_1/2.Figures/Box_DOC.jpeg", plot = last_plot())
+```
+
+
+### Let's see if our data follows a normal distribution
+### Let's see if the variation is homogenous 
+```{r}
+shapiro.test(df$Moy)
+# W = 0.43736, p-value = 1.238e-09
+
+fligner.test(Moy ~ Bioreacteur, data = df)
+# Fligner-Killeen:med chi-squared = 0.44481, df = 2, p-value = 0.8006
+```
+
+
+### On va faire le test non-parametrique Kruskal-Wallis 
+```{r}
+kruskal.test(Moy ~ Bioreacteur, data = df)
+
+# Kruskal-Wallis chi-squared = 3.4245, df = 2, p-value = 0.1805
+```
+
+
+
+
+
+#_________________________________________|NO2|_________________________________________#
+
+### Making the dataframe with the mean and sd
+```{r}
+df <- data.frame()
+
+for(i in unique(Analyse$Jour)) {
+  
+  subset(Analyse, Jour  == i) -> data_Jour
+  
+  aggregate(NNO2.mg.L. ~ Bioreacteur, data = data_Jour, mean, na.rm = TRUE) -> NO2_moy
+  
+  aggregate(NNO2.mg.L. ~ Bioreacteur, data = data_Jour, sd, na.rm = TRUE) -> NO2_sd
+  
+  df <- rbind(df,data.frame(NO2_moy,NO2_sd))
+  
+}
+
+#### Rearrange the rows to have all "Bleu", "Jaune", "Rouge" in that order + Remove the Tourb and Puit row.
+#### We should also have to make sure that the data got rearranged and that the Tourb and Puit row got deleted.
+df <- df %>% arrange(factor(Bioreacteur, levels = c("Bleu", "Jaune", "Rouge")))
+df <- df[-c(31,32),]
+
+#### Let's rename the Bioreacteur.1 column as "Jour" since that column is pretty useless for us.
+#### While we're at it, we can also change the name of our other column so that they represent the values properly.
+#### Plus, let's also make sure our changes worked
+colnames(df)[colnames(df) == "Bioreacteur.1"] <- "Jour"
+colnames(df)[colnames(df) == "NNO2.mg.L."] <- "Moy"
+colnames(df)[colnames(df) == "NNO2.mg.L..1"] <- "Sd"
+
+#### Now, we have to put the number of the days. Let's just use the long (but simple) way using our old friend "c()". 
+#### Also, we should look at what we did.
+df$Jour <- as.numeric(c("6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24"))
+
+#### We'll change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+df$Bioreacteur <- ifelse(grepl("^B", df$Bioreacteur), "Bioreactor 1",
+                        ifelse(grepl("^J", df$Bioreacteur), "Bioreactor 2",
+                         ifelse(grepl("^R", df$Bioreacteur), "Bioreactor 3", " ")))
+```
+
+#### Plotting
+```{r}
+Box_NO2 <-ggplot(df, aes(x = Bioreacteur, y = Moy)) + 
+      geom_boxplot() + 
+      xlab("") +
+      ylab("Average NO2 (mg/L)") +
+      theme(text = element_text(size = 14))
+Box_NO2
+```
+
+
+
+### Let's see if our data follows a normal distribution
+### Let's see if the variation is homogenous 
+```{r}
+shapiro.test(df$Moy)
+# W = 0.92911, p-value = 0.0465
+
+fligner.test(Moy ~ Bioreacteur, data = df)
+# Fligner-Killeen:med chi-squared = 0.36329, df = 2, p-value = 0.8339
+```
+
+
+
+### Non-parametrique Kruskal-Wallis 
+```{r}
+kruskal.test(Moy ~ Bioreacteur, data = df)
+
+# Kruskal-Wallis chi-squared = 0.43457, df = 2, p-value = 0.8047
+```
+
+
+
+
+
+
+
+
+#_________________________________________|NO3|_________________________________________#
+
+### Faire un data frame avec les moyennes et sd de NO3 selon le Bioreacteur et le Jour 
+```{r}
+df <- data.frame()
+
+for(i in unique(Analyse$Jour)) {
+  
+  subset(Analyse, Jour  == i) -> data_Jour
+  
+  aggregate(NNO3.mg.L. ~ Bioreacteur, data = data_Jour, mean, na.rm = TRUE) -> NO3_moy
+  
+  aggregate(NNO3.mg.L. ~ Bioreacteur, data = data_Jour, sd, na.rm = TRUE) -> NO3_sd
+  
+  df <- rbind(df,data.frame(NO3_moy,NO3_sd))
+  
+}
+
+#### Rearrange the rows to have all "Bleu", "Jaune", "Rouge" in that order + Remove the Tourb and Puit row.
+#### We should also have to make sure that the data got rearranged and that the Tourb and Puit row got deleted.
+#### I also realized that there's a negatif value so we'll replace that value with 0.
+df <- df %>% arrange(factor(Bioreacteur, levels = c("Bleu", "Jaune", "Rouge")))
+df <- df[-c(31,32),]
+df[25,2] = 0.00
+
+#### Let's rename the Bioreacteur.1 column as "Jour" since that column is pretty useless for us.
+#### While we're at it, we can also change the name of our other column so that they represent the values properly.
+#### Plus, let's also make sure our changes worked
+colnames(df)[colnames(df) == "Bioreacteur.1"] <- "Jour"
+colnames(df)[colnames(df) == "NNO3.mg.L."] <- "Moy"
+colnames(df)[colnames(df) == "NNO3.mg.L..1"] <- "Sd"
+
+#### Now, we have to put the number of the days. Let's just use the long (but simple) way using our old friend "c()". 
+#### Also, we should look at what we did.
+df$Jour <- as.numeric(c("6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24"))
+
+#### We'll change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+df$Bioreacteur <- ifelse(grepl("^B", df$Bioreacteur), "Bioreactor 1",
+                        ifelse(grepl("^J", df$Bioreacteur), "Bioreactor 2",
+                         ifelse(grepl("^R", df$Bioreacteur), "Bioreactor 3", " ")))
+```
+
+
+#### On commence d'abord par juste visualiser les données
+```{r}
+Box_NO3 <-ggplot(df, aes(x = Bioreacteur, y = Moy)) + 
+      geom_boxplot() + 
+      xlab("") +
+      ylab("Average NO3 (mg/L)") +
+      theme(text = element_text(size = 14))
+Box_NO3
+```
+
+
+
+
+### Let's see if our data follows a normal distribution
+### Let's see if the variation is homogenous 
+```{r}
+shapiro.test(df$Moy)
+# W = 0.62258, p-value = 1.392e-07
+
+fligner.test(Moy ~ Bioreacteur, data = df)
+# Fligner-Killeen:med chi-squared = 3.487, df = 2, p-value = 0.1749
+```
+
+
+
+### Non-parametrique Kruskal-Wallis test
+```{r}
+kruskal.test(Moy ~ Bioreacteur, data = df)
+# Kruskal-Wallis chi-squared = 2.1625, df = 2, p-value = 0.3392
+```
+
+
+
+
+
+#_________________________________________|NH4|_________________________________________#
+
+### Making the dataframe with the mean and sd 
+```{r}
+df <- data.frame()
+
+for(i in unique(Analyse$Jour)) {
+  
+  subset(Analyse, Jour  == i) -> data_Jour
+  
+  aggregate(NH4_NH3.mg.L.~ Bioreacteur, data = data_Jour, mean, na.rm = TRUE) -> NH3NH4_moy
+  
+  aggregate(NH4_NH3.mg.L.~ Bioreacteur, data = data_Jour, sd, na.rm = TRUE) -> NH3NH4_sd
+  
+  df <- rbind(df,data.frame(NH3NH4_moy,NH3NH4_sd))
+  
+}
+
+#### Rearrange the rows to have all "Bleu", "Jaune", "Rouge" in that order + Remove the Tourb and Puit row.
+#### We should also have to make sure that the data got rearranged and that the Tourb and Puit row got deleted.
+df <- df %>% arrange(factor(Bioreacteur, levels = c("Bleu", "Jaune", "Rouge")))
+df <- df[-c(31,32),]
+
+#### Let's rename the Bioreacteur.1 column as "Jour" since that column is pretty useless for us.
+#### While we're at it, we can also change the name of our other column so that they represent the values properly.
+#### Plus, let's also make sure our changes worked
+colnames(df)[colnames(df) == "Bioreacteur.1"] <- "Jour"
+colnames(df)[colnames(df) == "NH4.mg.L."] <- "Moy"
+colnames(df)[colnames(df) == "NH4.mg.L..1"] <- "Sd"
+
+#### Now, we have to put the number of the days. Let's just use the long (but simple) way using our old friend "c()". 
+#### Also, we should look at what we did.
+df$Jour <- as.numeric(c("6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24","6","8","10","12","14","16","18","20","22","24"))
+
+#### We'll change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+df$Bioreacteur <- ifelse(grepl("^B", df$Bioreacteur), "Bioreactor 1",
+                        ifelse(grepl("^J", df$Bioreacteur), "Bioreactor 2",
+                         ifelse(grepl("^R", df$Bioreacteur), "Bioreactor 3", " ")))
+```
+
+#### Plotting
+```{r}
+Box_NH4 <-ggplot(df, aes(x = Bioreacteur, y = Moy)) + 
+      geom_boxplot() + 
+      xlab("") +
+      ylab("Average NH4 (mg/L)") +
+      theme(text = element_text(size = 14))
+Box_NH4
+```
+
+
+### Let's see if our data follows a normal distribution
+### Let's see if the variation is homogenous 
+```{r}
+shapiro.test(df$Moy)
+#W = 0.51371, p-value = 7.504e-09
+
+fligner.test(Moy ~ Bioreacteur, data = df)
+# Fligner-Killeen:med chi-squared = 0.98381, df = 2, p-value = 0.6115
+```
+
+
+### Non-parametrique Kruskal-Wallis test
+```{r}
+kruskal.test(Moy ~ Bioreacteur, data = df)
+
+# Kruskal-Wallis chi-squared = 0.7513, df = 2, p-value = 0.6868
+```
+
+
+
+
+#______________________________________|Dissolved O2|______________________________________#
+
+### Making the dataframe for O2 and pH
+```{r}
+
+####  Garder la colonne d'O2 et de pH dissous seulement
+df <- Analyse[c("Bioreacteur", "Jour", "O2_dis", "pH")]
+df <- df[complete.cases(Analyse$pH), ]
+df <- df[!(df$Bioreacteur == "Puit"),] 
+df <- df[!(df$Bioreacteur == "Tourb"),]
+
+#### We'll change the names in the Bioreacteur column to Bioreactor 1, Bioreactor 2, Bioreactor 3 and Field
+df$Bioreacteur <- ifelse(grepl("^B", df$Bioreacteur), "Bioreactor 1",
+                        ifelse(grepl("^J", df$Bioreacteur), "Bioreactor 2",
+                         ifelse(grepl("^R", df$Bioreacteur), "Bioreactor 3", ""))) 
+
+#### Rearrange the rows to have all "Bleu", "Jaune", "Rouge" in that order.
+df <- df %>% arrange(factor(Bioreacteur, levels = c("Bleu", "Jaune", "Rouge")))
+
+```
+
+### Plotting
+```{r}
+#### Regardons les boxplots
+Box_O2 <-ggplot(df, aes(x = Bioreacteur, y = O2_dis)) + 
+      geom_boxplot() + 
+      xlab("") +
+      ylab("Average % dissolve Oxygen") +
+      theme(text = element_text(size = 14))
+Box_O2
+```
+
+### Let's see if our data follows a normal distribution
+### Let's see if the variation is homogenous
+```{r}
+shapiro.test(df$O2_dis)
+# W = 0.90024, p-value = 0.01355
+
+fligner.test(O2_dis ~ Bioreacteur, data = df)
+# Fligner-Killeen:med chi-squared = 0.38826, df = 2, p-value = 0.8236
+```
+
+
+### Non-parametrique Kruskal-Wallis test
+```{r}
+kruskal.test(O2_dis ~ Bioreacteur, data = df)
+# Kruskal-Wallis chi-squared = 0.41282, df = 2, p-value = 0.8135
+```
+
+
+
+
+
+#_________________________________________|pH|_________________________________________#
+
+### Plotting
+```{r}
+Box_pH <-ggplot(df, aes(x = Bioreacteur, y = pH)) + 
+      geom_boxplot() + 
+      xlab("") +
+      ylab("Average pH") +
+      theme(text = element_text(size = 14))
+Box_pH
+```
+
+### Let's see if our data follows a normal distribution
+### Let's see if the variation is homogenous
+```{r}
+shapiro.test(df$pH)
+# W = 0.96529, p-value = 0.4195
+
+bartlett.test(pH ~ Bioreacteur, data = df)
+# Bartlett's K-squared = 2.2439, df = 2, p-value = 0.3256
+```
+
+### Non-parametrique Kruskal-Wallis test
+```{r}
+kruskal.test(pH ~ Bioreacteur, data = df)
+
+# Kruskal-Wallis chi-squared = 5.7204, df = 2, p-value = 0.05726
+```
+
+
