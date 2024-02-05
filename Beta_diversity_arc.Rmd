@@ -19,17 +19,14 @@ library(vegan)
 library(tidyr)
 library(dplyr)
 library(ggplot2)
-
 ```
 
 
 ### Loading all files needed here
 ```{r}
-
 # Load ASV table and metadatas
 ASV_table <- t(read.table("~/sequences/Arc/arc_csv/rarefied_asv.csv", header = TRUE, row.names = 1, sep = ","))
 metadata <- read.table("~/sequences/Arc/arc_csv/rarefied_meta.csv", header=TRUE, sep=",", row.names = NULL)
-
 ```
 
 
@@ -43,7 +40,6 @@ metadata <- metadata %>% select(-is.neg,-Rugosite1,-Rugosite2)
 # We'll also change the name of the first column to "Nom"
 metadata$X <- gsub("-", ".", metadata$X)
 colnames(metadata)[1] <- "Nom"
-
 ```
 
 
@@ -63,7 +59,6 @@ all_dist <- meta_distance %>% select(all_of(meta_distance$Nom)) %>% as.dist()
 # Run the adonis2 function and look at the results
 Corr <- adonis2(all_dist ~ Bioreacteur, data = meta_distance, by="margin")
 print(Corr)
-
 ```
 
 
@@ -118,8 +113,8 @@ p <- ggplot(pcoa_df, aes(x = PCoA1, y = PCoA2, color = SampleType, shape = Shape
 p + theme(text = element_text(size = 20), legend.text = element_text(size = 16))  
 
 ggsave("/home/dpatel/sequences/Arc/arc_Figures/PCOA_beta1_arc.tiff", width = 8, height = 6, plot = last_plot())
-
 ```
+
 
 
 ### PERMANOVA FOR FILTERS ###
@@ -147,6 +142,7 @@ metadata$X <- gsub("-", ".", metadata$X)
 colnames(metadata)[1] <- "Nom"
 ```
 
+
 ### Doing the PERMANOVA (SEPARATE BASED ON JOURs)
 ```{r}
 # Separate the Filtres based on the Jours 
@@ -161,16 +157,12 @@ dist16 <- meta16_dist %>% select(all_of(meta16_dist$Nom)) %>% as.dist()
 meta710_dist <- inner_join(meta710, beta_dist, by = "Nom")
 dist710 <- meta710_dist %>% select(all_of(meta710_dist$Nom)) %>% as.dist()
 
-
 # Run the adonis2 function and look at the results
 Corr16 <- adonis2(dist16 ~ Bioreacteur + Jour, data = meta16_dist, by="margin")
 print(Corr16)
 
-
 Corr710 <- adonis2(dist710 ~ Bioreacteur + Jour, data = meta710_dist, by="margin")
 print(Corr710)
-
-
 ```
 
 ### Doing the PERMANOVA (ALL FILTERS COMBINED)
@@ -191,10 +183,7 @@ print(Corr)
 # Jour         1  0.32232   0.26121  6.3224  0.001 ***
 # Residual    15  0.76470   0.61972                  
 # Total       18  1.23395   1.00000       
-
 ```
-
-
 
 
 
@@ -253,16 +242,13 @@ Meta_filters_all$Nom <- gsub(".J", "-D", Meta_filters_all$Nom)
 # Extract numbers from the end of Sample names and multiply by 2
 Meta_filters_all <- Meta_filters_all %>%
 mutate(Nom = str_replace(Nom, "(\\d+)$", function(match) as.character(2 * as.numeric(match))))
-
 ```
 
 ### Doing the Distance matrix and dbRDA 
 ```{r}
 
 beta_dist <- vegdist(ASV_table, method = "bray")
-
 dbRDA_result <- capscale(beta_dist ~ Moy_DIC + Moy_DOC + Moy_NO2 + Moy_NOx + Moy_NH4 + Moy_NO3 , data = Meta_filters_all)
-
 ```
 
 ### Looking at the plot
@@ -282,7 +268,6 @@ anova(dbRDA_result, by="axis", perm.max=1000)
 anova(dbRDA_result, by="terms", permu=1000) 
 
 summary(dbRDA_result)
-
 ```
 
 ### Ok, Let's see if we can simplify our dbRDA
@@ -349,5 +334,4 @@ dbRDAfilter <-ggplot() +
 
 dbRDAfilter
 ggsave("/home/dpatel/sequences/Arc/arc_Figures/Arc_dbRDA_filter.tiff", width = 6, height = 4, plot = last_plot())
-
 ```
